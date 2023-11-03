@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/STM32CubeF1/Drivers/CMSIS/Device/ST/STM32F1xx/Include",
+                "${workspaceFolder}/STM32CubeF1/Drivers/CMSIS/Include",
+                "${workspaceFolder}/STM32CubeF1/Drivers/STM32F1xx_HAL_Driver/Inc"
+            ],
+            "defines": [],
+            "cStandard": "c17",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-clang-x64",
+            "compilerPath": "/usr/bin/gcc"
+        }
+    ],
+    "version": 4
+}
