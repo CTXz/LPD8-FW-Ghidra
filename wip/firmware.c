@@ -195,12 +195,51 @@ void ADC_set_DUALMOD_SCAN_CONT_ALIGN_EXTSEL_nconv(
 /**
  * @ 0x08002d7c
  */
-void DMA_CCR1_set_EN(uint32_t *dma_ccr1, bool enable)
+void DMA_CCR_set_EN(uint32_t *dma_ccr, bool enable)
 {
 	if (enable)
-		*dma_ccr1 |= DMA_CCR_EN;
+		*dma_ccr |= DMA_CCR_EN;
 	else
-		*dma_ccr1 &= ~DMA_CCR_EN;
+		*dma_ccr &= ~DMA_CCR_EN;
+}
+
+/**
+ * @ 0x08002eb0
+ */
+void DMA_set_DIR_CIRC_PINC_MINC_PSIZE_MSIZE_PL_MEM2MEM_CNDTR_CPAR_CMAR(
+    uint32_t *dma_ccr,
+    uint32_t cpar, uint32_t cmar,
+    uint32_t dir_msk, uint32_t cndtr,
+    uint32_t pinc_msk, uint32_t minc_msk,
+    uint32_t psize_msk, uint32_t msize_msk,
+    uint32_t circ_msk, uint32_t pl_msk,
+    uint32_t mem2mem_msk)
+{
+	uint32_t *dma_cndtr = dma_ccr + 0x4;
+	uint32_t *dma_cpar = dma_cndtr + 0x4;
+	uint32_t *dma_cmar = dma_cpar + 0x4;
+
+	*dma_ccr &= ~(DMA_CCR_DIR |
+		      DMA_CCR_CIRC |
+		      DMA_CCR_PINC |
+		      DMA_CCR_MINC |
+		      DMA_CCR_PSIZE |
+		      DMA_CCR_MSIZE |
+		      DMA_CCR_PL |
+		      DMA_CCR_MEM2MEM);
+
+	*dma_ccr |= dir_msk |
+		    circ_msk |
+		    pinc_msk |
+		    minc_msk |
+		    psize_msk |
+		    msize_msk |
+		    pl_msk |
+		    mem2mem_msk;
+
+	*dma_cndtr = cndtr;
+	*dma_cpar = cpar;
+	*dma_cmar = cmar;
 }
 
 /**
@@ -223,6 +262,50 @@ void RCC_set_AHBENR(uint32_t msk, bool set)
 		RCC->AHBENR |= msk;
 	else
 		RCC->AHBENR &= ~msk;
+}
+
+// FUN_080024e4(ADC1_Base,0xf,0x10,6);
+
+/**
+ * @ 0x080024e4
+ */
+void FUN_080024e4(uint32_t adc_base, uint param_2, uint param_3, int param_4)
+
+{
+	// uint uVar1;
+
+	// if (param_2 < 10) // 0b1010 > 0b0000, 0b0001, 0b0010, 0b0011, 0b0100, 0b0101, 0b0110, 0b0111, 0b1000, 0b1001
+	// {
+	// 	*(uint *)(adc_base + 0x10) =
+	// 	    *(uint *)(adc_base + 0x10) & ~(7 << (param_2 * 3 & 0xff)) | param_4 << (param_2 * 3 & 0xff);
+	// }
+	// else // 0b1010, 0b1011, 0b1100, 0b1101, 0b1110, 0b1111
+	// {
+	// 	uVar1 = (param_2 - 10) * 3;
+	// 	*(uint *)(adc_base + 0xc) =
+	// 	    *(uint *)(adc_base + 0xc) & ~(7 << (uVar1 & 0xff)) | param_4 << (uVar1 & 0xff);
+	// }
+
+	// if (param_3 < 7) // 0b0111
+	// {
+	// 	uVar1 = (param_3 - 1) * 5;
+	// 	*(uint *)(adc_base + 0x34) =
+	// 	    *(uint *)(adc_base + 0x34) & ~(0x1f << (uVar1 & 0xff)) | param_2 << (uVar1 & 0xff);
+	// 	return;
+	// }
+
+	// if (param_3 < 0xd) // 0b1101
+	// {
+	// 	uVar1 = (param_3 - 7) * 5;
+	// 	*(uint *)(adc_base + 0x30) =
+	// 	    *(uint *)(adc_base + 0x30) & ~(0x1f << (uVar1 & 0xff)) | param_2 << (uVar1 & 0xff);
+	// 	return;
+	// }
+
+	// uVar1 = (param_3 - 0xd) * 5;
+	// *(uint *)(adc_base + 0x2c) =
+	//     *(uint *)(adc_base + 0x2c) & ~(0x1f << (uVar1 & 0xff)) | param_2 << (uVar1 & 0xff);
+	// return;
 }
 
 /**
