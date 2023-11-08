@@ -5,9 +5,9 @@
 #include <stm32f1xx_hal.h>
 
 #define UINT8_UNKNOWN_FLAG_20000000 0x20000000
-#define UINT8_MIDI_BUFFER_REM_SIZE_20000004 0x20000004
-#define UINT8_PTR_PTR_MIDI_BUFFER_CURRENT_ELEMENT_20000008 0x20000008
-#define UINT8_PTR_PTR_MIDI_BUFFER_START_2000000c 0x2000000c
+#define UINT8_MIDI_BUFFER_REMAINING_SPACE_20000004 0x20000004
+#define UINT8_PTR_PTR_MIDI_BUFFER_HEAD_20000008 0x20000008
+#define UINT8_PTR_PTR_MIDI_BUFFER_TAIL_2000000c 0x2000000c // buffer_end - MIDI_BUFFER_SIZE
 #define UINT8_UNKNOWN_FLAG_20000011 0x20000011
 #define UNKNOWN_ENUM_20000012 0x20000012
 #define UINT8_PREV_MODE_0x20000031 0x20000031
@@ -69,7 +69,8 @@ typedef uint8_t mode_t;
 #define MODE_PROG_CHNG 0x3
 #define MODE_UNSET 0xFF
 
-typedef struct {
+typedef struct
+{
 	pad_state_t state;
 	midi_cmd_msb_t cmd_msb;
 	uint8_t cmd;
@@ -78,7 +79,8 @@ typedef struct {
 } pad_midi;
 
 // These appear to be updated on on-push and on-release events only
-typedef struct {
+typedef struct
+{
 	pad_state_t unknown0;
 	pad_state_t unknown1;
 	pad_state_t prog_chng; // offset: 2
@@ -218,22 +220,22 @@ void DMA_set_DIR_CIRC_PINC_MINC_PSIZE_MSIZE_PL_MEM2MEM_CNDTR_CPAR_CMAR(
 	uint32_t *dma_cmar = dma_cpar + 0x4;
 
 	*dma_ccr &= ~(DMA_CCR_DIR |
-	              DMA_CCR_CIRC |
-	              DMA_CCR_PINC |
-	              DMA_CCR_MINC |
-	              DMA_CCR_PSIZE |
-	              DMA_CCR_MSIZE |
-	              DMA_CCR_PL |
-	              DMA_CCR_MEM2MEM);
+		      DMA_CCR_CIRC |
+		      DMA_CCR_PINC |
+		      DMA_CCR_MINC |
+		      DMA_CCR_PSIZE |
+		      DMA_CCR_MSIZE |
+		      DMA_CCR_PL |
+		      DMA_CCR_MEM2MEM);
 
 	*dma_ccr |= dir_msk |
-	            circ_msk |
-	            pinc_msk |
-	            minc_msk |
-	            psize_msk |
-	            msize_msk |
-	            pl_msk |
-	            mem2mem_msk;
+		    circ_msk |
+		    pinc_msk |
+		    minc_msk |
+		    psize_msk |
+		    msize_msk |
+		    pl_msk |
+		    mem2mem_msk;
 
 	*dma_cndtr = cndtr;
 	*dma_cpar = cpar;
@@ -273,21 +275,29 @@ void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint
 	uint32_t *ADC_SQR2 = adc_base + 0x30;
 	uint32_t *ADC_SQR3 = adc_base + 0x34;
 
-	if (channel < 10) {
+	if (channel < 10)
+	{
 		*ADC_SMPR2 &= ~(ADC_SMPR2_SMP0 << (channel * 3));
 		*ADC_SMPR2 |= smp_bits << (channel * 3);
-	} else {
+	}
+	else
+	{
 		*ADC_SMPR1 &= ~(ADC_SMPR1_SMP10 << ((channel - 10) * 3));
 		*ADC_SMPR1 |= smp_bits << ((channel - 10) * 3);
 	}
 
-	if (nth_conv < 7) {
+	if (nth_conv < 7)
+	{
 		*ADC_SQR3 &= ~(ADC_SQR3_SQ1 << ((nth_conv - 1) * 5));
 		*ADC_SQR3 |= channel << ((nth_conv - 1) * 5);
-	} else if (nth_conv < 13) {
+	}
+	else if (nth_conv < 13)
+	{
 		*ADC_SQR2 &= ~(ADC_SQR2_SQ7 << ((nth_conv - 7) * 5));
 		*ADC_SQR2 |= channel << ((nth_conv - 7) * 5);
-	} else {
+	}
+	else
+	{
 		*ADC_SQR1 &= ~(ADC_SQR1_SQ13 << ((nth_conv - 0xd) * 5));
 		*ADC_SQR1 |= channel << ((nth_conv - 0xd) * 5);
 	}
@@ -305,9 +315,11 @@ void FUN_08003c80(void)
 
 	unknown *unknown_1 = UNKNOWN_20000046;
 
-	if (*unknown_1 != unknown_2) {
+	if (*unknown_1 != unknown_2)
+	{
 		*unknown_1 = unknown_2;
-		if (unknown_flag != 0) {
+		if (unknown_flag != 0)
+		{
 			// ...
 			return;
 		}
@@ -321,40 +333,41 @@ void write_midi_buffer(void *data, uint32_t size)
 {
 	// TODO: Clarify which pointers are only used for their address
 
-	uint8_t *rem_buf_size = UINT8_MIDI_BUFFER_REM_SIZE_20000004;
-	uint8_t *buf_end = UINT8_MIDI_BUFFER_END_2000024C;
-	uint8_t **buf_element = UINT8_PTR_PTR_MIDI_BUFFER_CURRENT_ELEMENT_20000008;
-	uint8_t **buf_start = UINT8_PTR_PTR_MIDI_BUFFER_START_2000000c;
+	uint8_t *remaining_space = UINT8_MIDI_BUFFER_REMAINING_SPACE_20000004;
+	uint8_t *buffer_end = UINT8_MIDI_BUFFER_END_2000024C;
+	uint8_t **head = UINT8_PTR_PTR_MIDI_BUFFER_HEAD_20000008;
+	uint8_t **tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_2000000c; // buffer_end - MIDI_BUFFER_SIZE
 
-	for (uint8_t i = 0; i < size; i++) {
-		uint8_t *nxt_buf_element = *buf_element + 1;
+	for (uint8_t i = 0; i < size; i++)
+	{
+		uint8_t *next_element = *head + 1;
 
-		// When buf_end is reached, continue buffer
-		// writing at buf_end - MIDI_BUFFER_SIZE
-		if (nxt_buf_element == buf_end) {
-			nxt_buf_element = buf_end - MIDI_BUFFER_SIZE; // 0x2000015C
+		// When buffer_end is reached, continue buffer
+		// writing at buffer_end - MIDI_BUFFER_SIZE
+		if (next_element == buffer_end)
+		{
+			next_element = *tail; // 0x2000015C
 		}
 
 		// Buffer is full
-		if (nxt_buf_element == *buf_start)
+		if (next_element == *tail)
 			break;
 
 		// Store data into buffer and move to next element
-		**buf_element = *(uint8_t *)data;
-		*buf_element = nxt_buf_element;
+		**head = *(uint8_t *)data;
+		*head = next_element;
 
 		// Move to next byte of data
 		data = data + 1;
 	}
 
-	const uint32_t last_element_addr = *buf_element;
-	const uint32_t buf_start_addr = *buf_start;
+	const uint32_t last_element_addr = *head;
+	const uint32_t tail_addr = *tail;
 
-	if (*buf_start <= *buf_element) {
-		*rem_buf_size = -0x10 - (last_element_addr - buf_start_addr);
-	} else {
-		*rem_buf_size = last_element_addr - buf_start_addr;
-	}
+	if (*tail <= *head)
+		*remaining_space = (tail_addr - last_element_addr) - 0x10;
+	else
+		*remaining_space = last_element_addr - tail_addr;
 }
 
 /**
@@ -365,8 +378,10 @@ void rst_pads(void)
 	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;	 // -> pad_midi[8]
 	pad_states *pads_states = PAD_STATES_8_20000552; // -> pad_states[8]
 
-	for (uint8_t i = 0; i < 8; i++) {
-		if (pads_midi[i].state == PAD_STATE_PRESSED) {
+	for (uint8_t i = 0; i < 8; i++)
+	{
+		if (pads_midi[i].state == PAD_STATE_PRESSED)
+		{
 			pads_midi[i].state = PAD_STATE_RELEASED;
 			pads_states[i].unknown0 = 0;
 			pads_states[i].unknown1 = 0;
@@ -375,7 +390,8 @@ void rst_pads(void)
 			pads_states[i].cc = PAD_STATE_RELEASED;
 
 			if (pads_midi[i].cmd >> 4 == MIDI_CMD_NOTE_OFF_MSB &&
-			    pads_midi[i].data1 <= MIDI_MAX_DATA_VAL) {
+			    pads_midi[i].data1 <= MIDI_MAX_DATA_VAL)
+			{
 				// Write NOTE OFF for pad to midi buffer
 				write_midi_buffer(&(pads_midi[i].cmd_msb), 4);
 			}
@@ -400,10 +416,12 @@ void update_pad_leds()
 	pad_states *pads_states = PAD_STATES_8_20000552;		 // -> pad_states[8]
 
 	// For every Pad
-	for (uint8_t i = 0; i < 8; i++) {
+	for (uint8_t i = 0; i < 8; i++)
+	{
 		pad_state_t pad_state;
 
-		switch (selected_mode) {
+		switch (selected_mode)
+		{
 		case MODE_PAD:
 			pad_state = pads_states[i].pad;
 			break;
@@ -414,7 +432,8 @@ void update_pad_leds()
 			pad_state = pads_states[i].prog_chng;
 			break;
 		default:
-			for (uint8_t j = 0; j < 8; j++) {
+			for (uint8_t j = 0; j < 8; j++)
+			{
 				prev_pads_state[j] = PAD_STATE_UNSET;
 			}
 
@@ -422,12 +441,15 @@ void update_pad_leds()
 		}
 
 		// Only update pad LED if pad_state has changed or mode has changed
-		if (prev_pads_state[i] != pad_state && *prev_mode != selected_mode) {
+		if (prev_pads_state[i] != pad_state && *prev_mode != selected_mode)
+		{
 			prev_pads_state[i] = pad_state;
 			*prev_mode = selected_mode;
 
-			if (pad_state == PAD_STATE_PRESSED) {
-				switch (i) {
+			if (pad_state == PAD_STATE_PRESSED)
+			{
+				switch (i)
+				{
 				case 0:
 					GPIOB->ODR |= (1 << LED_PAD_1_GPIO);
 					break;
@@ -455,8 +477,11 @@ void update_pad_leds()
 				default:
 					break;
 				}
-			} else {
-				switch (i) {
+			}
+			else
+			{
+				switch (i)
+				{
 				case 0:
 					GPIOB->ODR &= ~(1 << LED_PAD_1_GPIO);
 					break;
@@ -514,9 +539,11 @@ void update_leds(void)
 	pad_states *pads_states = PAD_STATES_8_20000552;		 // -> pad_states[8]
 
 	// I have yet to find out what sets this flag != 0
-	if (unknown_flag == 0) {
+	if (unknown_flag == 0)
+	{
 		/* Check if mode has been switched */
-		if (*prev_mode != selected_mode) {
+		if (*prev_mode != selected_mode)
+		{
 			// Clear PB Pad LEDs
 			GPIOB->ODR &= ~(1 << LED_PB_PAD_GPIO);
 			GPIOB->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
@@ -543,14 +570,16 @@ void update_leds(void)
 			 * 	or
 			 * 	2. Change the MIDI logic to behave like the LED logic
 			 */
-			for (uint8_t i = 0; i < 8; i++) {
+			for (uint8_t i = 0; i < 8; i++)
+			{
 				pads_states[i].prog_chng = 0;
 			}
 			*prev_mode = selected_mode;
 		}
 
 		// Set LEDs according to selected mode
-		switch (selected_mode) {
+		switch (selected_mode)
+		{
 		case MODE_PAD:
 			GPIOB->ODR |= (1 << LED_PB_PAD_GPIO);
 			break;
@@ -580,11 +609,13 @@ void update_leds(void)
 			else if ((uint8_t *)PROG_4_SELECT_FLAG == 1)
 				*selected_prog = 4;
 
-			if (*prev_selected_prog != *selected_prog) {
+			if (*prev_selected_prog != *selected_prog)
+			{
 				rst_pads();
 
 				// Reset states of all pads
-				for (uint8_t i = 0; i < 8; i++) {
+				for (uint8_t i = 0; i < 8; i++)
+				{
 					pads_midi[i].state = PAD_STATE_RELEASED;
 					pads_states[i].unknown0 = 0;
 					pads_states[i].unknown1 = 0;
@@ -594,7 +625,8 @@ void update_leds(void)
 				}
 			}
 
-			switch (*selected_prog) {
+			switch (*selected_prog)
+			{
 			case 1:
 				GPIOB->ODR |= (1 << LED_PAD_1_GPIO);
 				break;
@@ -616,7 +648,9 @@ void update_leds(void)
 		}
 
 		update_pad_leds();
-	} else {
+	}
+	else
+	{
 		/* Clear all LEDs */
 		GPIOB->ODR &= ~(1 << LED_PB_PAD_GPIO);
 		GPIOB->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
@@ -630,7 +664,8 @@ void update_leds(void)
 		GPIOB->ODR &= ~(1 << LED_PAD_7_GPIO);
 		GPIOB->ODR &= ~(1 << LED_PAD_8_GPIO);
 
-		switch (unknown_enum) {
+		switch (unknown_enum)
+		{
 		case 1:
 			GPIOB->ODR |= (1 << LED_PB_PAD_GPIO);
 			break;
@@ -680,9 +715,12 @@ void main_loop()
 	FUN_08004ef0();
 	FUN_08005318();
 
-	while (true) {
-		while (true) {
-			while (true) {
+	while (true)
+	{
+		while (true)
+		{
+			while (true)
+			{
 				FUN_08003a94();
 
 				if (*unknown_flag_0 == 0)
