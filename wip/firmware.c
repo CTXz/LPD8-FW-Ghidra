@@ -100,6 +100,7 @@ typedef struct {
 
 /**
  * @ 0x080023e6
+ * Progress: DONE
  */
 void ADC_set_DMA(uint32_t adc_base, bool enable)
 {
@@ -112,6 +113,7 @@ void ADC_set_DMA(uint32_t adc_base, bool enable)
 
 /**
  * @ 0x080023d0
+ * Progress: DONE
  */
 void ADC_set_ADON(uint32_t adc_base, bool enable)
 {
@@ -124,6 +126,7 @@ void ADC_set_ADON(uint32_t adc_base, bool enable)
 
 /**
  * @ 0x08002558
+ * Progress: DONE
  */
 void ADC_set_RSTCAL(uint32_t adc_base)
 {
@@ -133,21 +136,18 @@ void ADC_set_RSTCAL(uint32_t adc_base)
 
 /**
  * @ 0x0800248e
- *
- * Returns true if RSTCAL bit is 1 (waiting)
- * The bit is checked by shifting it to the MSB.
- * If the MSB = 1, it may be interpreted as a negative
- * number by bpl (Branch if Plus). Not sure why they
- * didn't just use a bit mask...
+ * Progress: DONE
  */
 bool ADC_read_RSTCAL(uint32_t adc_base)
 {
 	uint32_t *ADC_CR2 = adc_base + ADC_CR2_OFFSET;
-	return (*ADC_CR2 << (31 - ADC_CR2_RSTCAL_Pos)) < 0;
+	// Real code uses shift to MSB and then checks if negative
+	return *ADC_CR2 & ADC_CR2_RSTCAL;
 }
 
 /**
  * @ 0x08002578
+ * Progress: DONE
  */
 void ADC_set_CAL(uint32_t adc_base)
 {
@@ -157,15 +157,18 @@ void ADC_set_CAL(uint32_t adc_base)
 
 /**
  * @ 0x08002480
+ * Progress: DONE
  */
 bool ADC_read_CAL(uint32_t adc_base)
 {
 	uint32_t *ADC_CR2 = adc_base + ADC_CR2_OFFSET;
-	return (*ADC_CR2 << (31 - ADC_CR2_CAL_Pos)) < 0;
+	// Real code uses shift to MSB and then checks if negative
+	return *ADC_CR2 & ADC_CR2_CAL;
 }
 
 /**
  * @ 0x08002562
+ * Progress: DONE
  */
 void ADC_set_EXTTRIG_SWSTART(uint32_t adc_base, bool enable)
 {
@@ -178,6 +181,7 @@ void ADC_set_EXTTRIG_SWSTART(uint32_t adc_base, bool enable)
 
 /**
  * @ 0x0800249c
+ * Progress: DONE
  */
 void ADC_set_DUALMOD_SCAN_CONT_ALIGN_EXTSEL_nconv(
     uint32_t adc_base,
@@ -204,6 +208,7 @@ void ADC_set_DUALMOD_SCAN_CONT_ALIGN_EXTSEL_nconv(
 
 /**
  * @ 0x08002d7c
+ * Progress: DONE
  */
 void DMA_CCR_set_EN(uint32_t *dma_ccr, bool enable)
 {
@@ -215,6 +220,7 @@ void DMA_CCR_set_EN(uint32_t *dma_ccr, bool enable)
 
 /**
  * @ 0x08002eb0
+ * Progress: DONE
  */
 void DMA_set_DIR_CIRC_PINC_MINC_PSIZE_MSIZE_PL_MEM2MEM_CNDTR_CPAR_CMAR(
     uint32_t *dma_ccr,
@@ -254,6 +260,7 @@ void DMA_set_DIR_CIRC_PINC_MINC_PSIZE_MSIZE_PL_MEM2MEM_CNDTR_CPAR_CMAR(
 
 /**
  * @ 0x08004504
+ * Progress: DONE
  */
 void RCC_set_APB2ENR(uint32_t msk, bool set)
 {
@@ -265,6 +272,7 @@ void RCC_set_APB2ENR(uint32_t msk, bool set)
 
 /**
  * @ 0x080044d4
+ * Progress: DONE
  */
 void RCC_set_AHBENR(uint32_t msk, bool set)
 {
@@ -276,6 +284,8 @@ void RCC_set_AHBENR(uint32_t msk, bool set)
 
 /**
  * @ 0x080024e4
+ * Progress: ALMOST DONE
+ * TODO: Explain the seemingly "magic" multiplications and subtractions
  */
 void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint32_t smp_bits)
 {
@@ -307,7 +317,8 @@ void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint
 
 /**
  * @ 0x080039aa
- * TODO
+ * Progress: ALMOST DONE
+ * TODO: Resolve unknown_ptr_0
  */
 
 //   local_34[0] = 0xff;
@@ -388,6 +399,8 @@ void FUN_080039aa(uint32_t *gpio_base, uint16_t *gpio_msk, uint16_t *cnf_mode_ms
 
 /**
  * @ 0x08003c80
+ * Progress: ALMOST DONE / AWAITING MORE INFO
+ * TODO: Resolve unknown_flag and what the SYSEx message does
  */
 void eval_mode_pbs(void)
 {
@@ -430,6 +443,9 @@ void eval_mode_pbs(void)
 
 /**
  * @ 0x08005688
+ * Progress: ALMOST DONE
+ * TODO: Explain why a subtraction of 0x10 is performed
+ *       to calculate the remaining space
  */
 void write_midi_buffer(void *data, uint32_t size)
 {
@@ -472,6 +488,8 @@ void write_midi_buffer(void *data, uint32_t size)
 
 /**
  * @ 0x0800442c
+ * Progress: ALMOST DONE / AWAITING MORE INFO
+ * TODO: Resolve unknown0 and unknown1 fields of pad_states struct
  */
 void rst_pads(void)
 {
@@ -498,6 +516,8 @@ void rst_pads(void)
 
 /**
  * @ 0x08003420
+ * Progress: DONE
+ *
  * Called by `update_leds`, this function manages and updates the LEDs
  * for all 8 pads. It handles momentary LED toggles when pads are pressed
  * and released. The only exception is during PROGRAM mode (where LEDs are
@@ -604,7 +624,10 @@ void update_pad_leds()
 
 /**
  *  @ 0x08003da8
- *
+ * Progress: ALMOST DONE / AWAITING MORE INFO
+ * TODO: Resolve unknown_flag, unknown_enum and uknown0 and unknown1 fields
+ *       of the pad_states struct
+
  * The following function is responsible for
  * handling/updating the LEDs of the LPD8.
  * This includes:
@@ -784,6 +807,10 @@ void update_leds(void)
 	*prev_selected_prog = *selected_prog;
 }
 
+/**
+ * @ 0x08005550
+ * Progress: INCOMPLETE
+ */
 void main_loop()
 {
 	uint8_t *unknown_flag_0 = UINT8_UNKNOWN_FLAG_20000000;
