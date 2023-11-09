@@ -304,11 +304,54 @@ void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint
 }
 
 /**
- * @ 0x08003d08
+ * @ 0x08003c80
  * TODO
  */
 void FUN_08003c80(void)
 {
+	// ushort uVar1;
+	// int iVar2;
+	// uint uVar3;
+	// undefined4 local_18;
+	// undefined4 local_14;
+	// undefined4 local_10;
+
+	// iVar2 = DAT_08003d08;
+	// uVar1 = *(ushort *)(DAT_08003d08 + 0xc);
+	// uVar3 = (uint)uVar1;
+	// if (*(ushort *)(DAT_08003d08 + 10) != uVar3)
+	// {
+	// 	*(ushort *)(DAT_08003d08 + 10) = uVar1;
+	// 	if (*DAT_08003d0c != '\0')
+	// 	{
+	// 		local_18 = 0x75004704;
+	// 		local_14 = 0x2006b04;
+	// 		local_10 = CONCAT13(0xf7, CONCAT12((char)(uVar1 >> 6), 0x5a07));
+	// 		write_midi_buffer(&local_18, 0xc);
+	// 		return;
+	// 	}
+	// 	if (-1 < (int)(uVar3 << 0x19))
+	// 	{
+	// 		if ((int)(uVar3 << 0x18) < 0)
+	// 		{
+	// 			*(undefined *)(iVar2 + 3) = 1;
+	// 			return;
+	// 		}
+	// 		if ((int)(uVar3 << 0x17) < 0)
+	// 		{
+	// 			*(undefined *)(iVar2 + 3) = 3;
+	// 		}
+	// 		else if ((int)(uVar3 << 0x16) < 0)
+	// 		{
+	// 			*(undefined *)(iVar2 + 3) = 2;
+	// 			return;
+	// 		}
+	// 		return;
+	// 	}
+	// 	*(undefined *)(iVar2 + 3) = 0;
+	// }
+	// return;
+
 	const unknown unknown_0 = *(unknown *)UNKNOWN_2000003c;
 	const unknown unknown_2 = *(unknown *)UNKNOWN_20000048;
 	const uint8_t unknown_flag = *(uint8_t *)UINT8_UNKNOWN_FLAG_20000011;
@@ -320,7 +363,8 @@ void FUN_08003c80(void)
 		*unknown_1 = unknown_2;
 		if (unknown_flag != 0)
 		{
-			// ...
+			// Terminates some sort of SysEx message ?!
+			uint8_t data[12] = {0x04, 0x47, 0x00, 0x75, 0x04, 0x6b, 0x00, 0x02, 0x07, 0x5a, (unknown_2 >> 6), 0xf7};
 			return;
 		}
 	}
