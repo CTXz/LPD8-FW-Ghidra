@@ -45,6 +45,9 @@
 #define ADC_CR1_OFFSET 0x4
 #define ADC_CR2_OFFSET 0x8
 #define ADC_SQR1_OFFSET 0x2c
+#define GPIO_CRL_OFFSET 0x0
+#define GPIO_CRH_OFFSET 0x4
+#define GPIO_CR_CNF_MODE 0xF
 
 #define MIDI_MAX_DATA_VAL 127 // 0x7F
 #define MIDI_BUFFER_SIZE 240  // 0xF0
@@ -300,6 +303,83 @@ void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint
 	{
 		*ADC_SQR1 &= ~(ADC_SQR1_SQ13 << ((nth_conv - 0xd) * 5));
 		*ADC_SQR1 |= channel << ((nth_conv - 0xd) * 5);
+	}
+}
+
+//   local_34[0] = 0xff;
+//   local_2c = 0;
+//   FUN_080039aa(DAT_080023b4,local_34);
+//   local_34[0] = 0xf;
+//   local_2c = 0;
+//   FUN_080039aa(DAT_080023b8,local_34);
+//   local_34[0] = 0x3c;
+//   local_2c = 0;
+//   FUN_080039aa(DAT_080023bc,local_34);
+
+//                      DAT_080023b4                                    XREF[1]:     init_dma_adc:080021f4(R)
+// 080023b4 00 08 01 40     undefined4 40010800h
+//                      DAT_080023b8                                    XREF[1]:     init_dma_adc:08002204(R)
+// 080023b8 00 0c 01 40     undefined4 40010C00h
+//                      DAT_080023bc                                    XREF[1]:     init_dma_adc:08002214(R)
+// 080023bc 00 10 01 40     undefined4 40011000h
+
+void FUN_080039aa(uint32_t *gpio_base, uint16_t *gpio_msk, uint16_t *cnf_mode_msk)
+{
+	uint32_t *unknown_ptr_0 = gpio_msk + 4;
+	uint8_t cnf_mode_bits = *unknown_ptr_0 & 0xf;
+
+	uint32_t *GPIO_BSRR = gpio_base + 0x10;
+	uint32_t *GPIO_BRR = gpio_base + 0x14;
+	uint32_t *GPIO_CRL = gpio_base + 0x00;
+	uint32_t *GPIO_CRH = gpio_base + 0x04;
+
+	// Check MSB
+	if ((*unknown_ptr_0 << 0x1b) < 0) {
+		cnf_mode_bits |= *cnf_mode_msk;
+	}
+
+	if (*gpio_msk & 0xFF) { // Check any of GPIO's 0-7 are selected in the mask
+
+		uint32_t crl = *GPIO_CRL;
+
+		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++) {
+
+			uint8_t msk = 1 << i_gpio;
+
+			if ((*gpio_msk & msk)) {
+				crl &= ~(GPIO_CR_CNF_MODE << (i_gpio * 4));
+				crl |= cnf_mode_bits << (i_gpio * 4);
+
+				if (*unknown_ptr_0 == 0x28)
+					*GPIO_BRR = msk;
+				else if (*unknown_ptr_0 == 0x48)
+					*GPIO_BSRR = msk;
+			}
+		}
+
+		*GPIO_CRL = crl;
+	}
+
+	if (*gpio_msk > 0xFF) { // Check any of GPIO's 8-15 are selected in the mask
+
+		uint32_t crh  = *GPIO_CRH;
+
+		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++) {
+
+			uint8_t msk = 1 << (i_gpio + 8);
+
+			if ((*gpio_msk & msk)) {
+				crh &= ~(GPIO_CR_CNF_MODE << (i_gpio * 4));
+				crh |= cnf_mode_bits << (i_gpio * 4);
+
+				if (*unknown_ptr_0 == 0x28)
+					*GPIO_BRR = msk;
+				else if (*unknown_ptr_0 == 0x48)
+					*GPIO_BSRR = msk;
+			}
+		}
+
+		*GPIO_CRH = crh;
 	}
 }
 
