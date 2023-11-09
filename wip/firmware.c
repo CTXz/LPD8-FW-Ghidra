@@ -8,18 +8,20 @@
 #define UINT8_MIDI_BUFFER_REMAINING_SPACE_20000004 0x20000004
 #define UINT8_PTR_PTR_MIDI_BUFFER_HEAD_20000008 0x20000008
 #define UINT8_PTR_PTR_MIDI_BUFFER_TAIL_2000000c 0x2000000c // buffer_end - MIDI_BUFFER_SIZE
+#define UINT8_PTR_MIDI_BUFFER_TAIL_2000015c 0x2000015c
 #define UINT8_UNKNOWN_FLAG_20000011 0x20000011
 #define UNKNOWN_ENUM_20000012 0x20000012
+#define UINT8_SYSTICK_DECREMENTER_0_20000018 0x20000018 // Decrements on every SysTick Interrupt
 #define UINT8_PREV_MODE_0x20000031 0x20000031
 #define UINT8_PREV_SELECTED_PROG_20000032 0x20000032
-#define UINT8_8_PREV_PADS_STATE_20000033 0x20000033 // .. 0x2000003A
-#define UINT8_UNKNOWN_COUNTER_2000003c 0x2000003c
-#define UINT8_UNKNOWN_COUNTER_2000003e 0x2000003e
+#define UINT8_8_PREV_PADS_STATE_20000033 0x20000033	// .. 0x2000003A
+#define UINT8_SYSTICK_DECREMENTER_1_2000003c 0x2000003c // Decrements on every SysTick Interrupt
+#define UINT8_DEBOUNCE_COUNTER_2000003e 0x2000003e
 #define UINT8_SELECTED_MODE_2000003f 0x2000003f
 #define UINT8_SELECTED_PROG_20000042 0x20000042
 #define UINT8_PREV_MODE_20000043 0x20000043
-#define UINT16_PREV_MODE_PADS_IDR_BITS_20000044 0x20000044
-#define UINT16_PREV_MODE_PADS_IDR_BITS_20000046 0x20000046
+#define UINT16_PREV_MODE_PB_IDR_BITS_20000044 0x20000044
+#define UINT16_PREV_MODE_PB_IDR_BITS_20000046 0x20000046
 #define UINT16_MODE_PB_IDR_BITS_CPY_20000048 0x20000048
 #define UINT8_UNKNOWN_FLAG_20000098 0x20000098
 #define UINT8_MIDI_BUFFER_END_2000024C 0x2000024C
@@ -65,6 +67,9 @@
 
 #define MIDI_MAX_DATA_VAL 127 // 0x7F
 #define MIDI_BUFFER_SIZE 240  // 0xF0
+#define MODE_PB_SYSTICK_SCAN_INTERVALS 4
+#define MODE_PB_DEBOUNCE_THRESHOLD 10
+#define MODE_PB_DEBOUNCE_COUNT 240
 
 typedef uint32_t unknown; // So the linter doesn't complain
 
@@ -104,6 +109,22 @@ typedef struct
 	pad_state_t pad;       // offset: 3
 	pad_state_t cc;	       // offset: 4
 } pad_states;
+
+/**
+ * @ 0x08004e7c, Called by IVT Entry @ 0x0800203c
+ * Progress: DONE
+ */
+void SysTick_Handler(void)
+{
+	uint8_t *systick_decr_0 = UINT8_SYSTICK_DECREMENTER_0_20000018;
+	uint8_t *systick_decr_1 = UINT8_SYSTICK_DECREMENTER_1_2000003c;
+
+	if (*systick_decr_0 != 0)
+		*systick_decr_0 = *systick_decr_0 - 1;
+
+	if (*systick_decr_1 != 0)
+		*systick_decr_1 = *systick_decr_1 - 1;
+}
 
 /**
  * @ 0x080023e6
@@ -469,41 +490,47 @@ void write_midi_buffer(void *data, uint32_t size)
 
 /**
  * @ 0x08003d10
- * Progress: ALMOST DONE / AWAITING MORE INFO
- * TODO: Resolve unknown_counter_0 and unknown_counter_1
- *       1 is likely used for debouncing,
- * 	 not so sure about 0
+ * Progress: DONE
  */
 void read_mode_pbs(void)
-
 {
-	uint8_t *unknown_counter_0 = UINT8_UNKNOWN_COUNTER_2000003c;
-	uint8_t *unknown_counter_1 = UINT8_UNKNOWN_COUNTER_2000003e;
-	uint16_t *prev_mode_pbs = UINT16_PREV_MODE_PADS_IDR_BITS_20000044;
+	uint8_t *systick_decr = UINT8_SYSTICK_DECREMENTER_1_2000003c;
+	uint8_t *debounce = UINT8_DEBOUNCE_COUNTER_2000003e;
+	uint16_t *prev_mode_pbs = UINT16_PREV_MODE_PB_IDR_BITS_20000044;
 	uint16_t *mode_pbs = UINT16_MODE_PB_IDR_BITS_CPY_20000048;
 
-	if (*unknown_counter_0 == 0)
+	if (*systick_decr == 0)
 	{
-		// Counter is likely  decremented by interrupt (IVT 0x0800203c, ISR 0x08004e7c)
-		*unknown_counter_0 = 4;
+		// Decremented by SysTick_Handler()
+		*systick_decr = MODE_PB_SYSTICK_SCAN_INTERVALS;
 
 		// Read mode push buttons. Negation due to PU's.
 		const uint32_t _mode_pbs = ~(PB_GPIO_PORT->IDR) & PB_IDR_MSK;
 		if (*prev_mode_pbs != _mode_pbs)
 		{
-			*unknown_counter_1 = 0;
+			*debounce = 0;
 			*prev_mode_pbs = _mode_pbs;
 			return;
 		}
 
-		// Debouncing?
-		if (*unknown_counter_1 < 240) // TODO: Determine how much this is in us/ms...
+		/*
+		 * Debouncing/Bounce filtering?
+		 * The following code likely ensures stable mode push button states
+		 * by applying changes only if the buttons have maintained the same
+		 * state for at least MODE_PB_DEBOUNCE_THRESHOLD executions.
+		 *
+		 * I'm uncertain why the debounce counter reaches 240 even tough it's
+		 * only checked against MODE_PB_DEBOUNCE_THRESHOLD. A simpler approach
+		 * would be to count up to MODE_PB_DEBOUNCE_THRESHOLD directly and
+		 * cease incrementing when the threshold is reached.
+		 * The debounce counter is also not used anywhere else...
+		 * Perhaps this is some compiler bogus related to the data type of the
+		 * debounce counter? Not sure...
+		 */
+		if (*debounce < 240)
 		{
-			// Apply state only after 9 counts
-			if (*unknown_counter_1 == 9) // TODO: Determine how much this is in us/ms...
+			if (++(*debounce) == MODE_PB_DEBOUNCE_THRESHOLD)
 				*mode_pbs = _mode_pbs;
-
-			*unknown_counter_1++;
 		}
 	}
 }
@@ -518,7 +545,7 @@ void eval_mode_pbs(void)
 	const uint16_t mode_pbs = *(uint16_t *)UINT16_MODE_PB_IDR_BITS_CPY_20000048;
 	const uint8_t unknown_flag = *(uint8_t *)UINT8_UNKNOWN_FLAG_20000011;
 
-	unknown *prev_mode_pbs = UINT16_PREV_MODE_PADS_IDR_BITS_20000046;
+	unknown *prev_mode_pbs = UINT16_PREV_MODE_PB_IDR_BITS_20000046;
 	mode_t *selected_mode = UINT8_SELECTED_MODE_2000003f;
 
 	if (*prev_mode_pbs != mode_pbs)
@@ -897,6 +924,30 @@ void update_leds(void)
 }
 
 /**
+ * @ 0x08003a94
+ * Progress: DONE
+ */
+void reload_IWDG(void)
+{
+	IWDG->KR = IWDG_KEY_RELOAD;
+}
+
+/**
+ * @0x008002584
+ * Progress: DONE
+ */
+void deinit_midi_buffer(void)
+{
+	uint8_t *midi_buf_rem_space = UINT8_MIDI_BUFFER_REMAINING_SPACE_20000004;
+	uint8_t **midi_buf_tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_2000000c;
+	uint8_t **midi_buf_head = UINT8_PTR_PTR_MIDI_BUFFER_HEAD_20000008;
+
+	*midi_buf_rem_space = 0;
+	*midi_buf_tail = UINT8_PTR_MIDI_BUFFER_TAIL_2000015c;
+	*midi_buf_head = UINT8_PTR_MIDI_BUFFER_TAIL_2000015c;
+}
+
+/**
  * @ 0x08005550
  * Progress: INCOMPLETE
  */
@@ -915,7 +966,7 @@ void main_loop()
 		{
 			while (true)
 			{
-				FUN_08003a94();
+				reload_IWDG();
 
 				if (*unknown_flag_0 == 0)
 					break;
@@ -949,6 +1000,6 @@ void main_loop()
 			FUN_08003d5c();
 		}
 
-		FUN_08002584();
+		deinit_midi_buffer();
 	}
 }
