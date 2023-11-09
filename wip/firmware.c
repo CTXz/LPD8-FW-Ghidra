@@ -5,6 +5,7 @@
 #include <stm32f1xx_hal.h>
 
 #define UINT8_UNKNOWN_FLAG_20000000 0x20000000
+#define UINT8_UNKNOWN_20000003 0x20000003
 #define UINT8_MIDI_BUFFER_REMAINING_SPACE_20000004 0x20000004
 #define UINT8_PTR_PTR_MIDI_BUFFER_HEAD_20000008 0x20000008
 #define UINT8_PTR_PTR_MIDI_BUFFER_TAIL_2000000c 0x2000000c // buffer_end - MIDI_BUFFER_SIZE
@@ -30,6 +31,7 @@
 #define PROG_2_SELECT_FLAG PROG_3_SELECT_FLAG - 0x6 // uint8_t
 #define PROG_1_SELECT_FLAG PROG_2_SELECT_FLAG - 0x6 // uint8_t
 
+#define LED_GPIO_PORT GPIOB
 #define LED_PAD_1_GPIO 5
 #define LED_PAD_2_GPIO 6
 #define LED_PAD_3_GPIO 7
@@ -42,10 +44,15 @@
 #define LED_PB_PROG_CHNG_GPIO 14
 #define LED_PB_CC_GPIO 15
 
+#define PB_GPIO_PORT GPIOC
 #define PB_PROG_GPIO 6
 #define PB_PAD_GPIO 7
 #define PB_PROG_CHNG_GPIO 8
 #define PB_CC_GPIO 9
+#define PB_IDR_MSK (1 << PB_PROG_GPIO) \
+		   | (1 << PB_PAD_GPIO) \
+		   | (1 << PB_PROG_CHNG_GPIO) \
+		   | (1 << PB_CC_GPIO)
 
 #define ADC_CR1_OFFSET 0x4
 #define ADC_CR2_OFFSET 0x8
@@ -317,8 +324,9 @@ void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint
 
 /**
  * @ 0x080039aa
- * Progress: ALMOST DONE
- * TODO: Resolve unknown_ptr_0
+ * Progress: INCOMPLETE
+ * TODO: Resolve unknown_ptr_0, understand cnfd_mode_bits and declare
+ * 	 defines for GPIO reg offsets
  */
 
 //   local_34[0] = 0xff;
@@ -398,50 +406,6 @@ void FUN_080039aa(uint32_t *gpio_base, uint16_t *gpio_msk, uint16_t *cnf_mode_ms
 }
 
 /**
- * @ 0x08003c80
- * Progress: ALMOST DONE / AWAITING MORE INFO
- * TODO: Resolve unknown_flag and what the SYSEx message does
- */
-void eval_mode_pbs(void)
-{
-	const uint16_t mode_idr_bits = *(uint16_t *)UINT16_MODE_PB_IDR_BITS_CPY_20000048;
-	const uint8_t unknown_flag = *(uint8_t *)UINT8_UNKNOWN_FLAG_20000011;
-
-	unknown *prev_mode_idr_bits = UINT16_PREV_MODE_PADS_IDR_BITS_20000046;
-	mode_t *selected_mode = UINT8_SELECTED_MODE_2000003f;
-
-	if (*prev_mode_idr_bits != mode_idr_bits) {
-
-		*prev_mode_idr_bits = mode_idr_bits;
-
-		// Suspecting this is some sort of debug flag...
-		if (unknown_flag != 0) {
-
-			// Shift bits to start at bit 0. PROG is first GPIO.
-			uint8_t shifted2lsbits = (mode_idr_bits >> PB_PROG_GPIO);
-
-			// Terminates some sort of SysEx message that conveys mode pb gpio info??!
-			uint8_t data[12] = {0x04, 0x47, 0x00, 0x75, 0x04, 0x6b, 0x00, 0x02,
-			                    0x07, 0x5a, shifted2lsbits, 0xf7
-			                   };
-
-			return;
-		}
-
-		// Real code uses shift to MSB and then checks if negative
-		// Masks achieve the same result and are more readable
-		if (mode_idr_bits & (1 << PB_PROG_GPIO))
-			*selected_mode = MODE_PROG;
-		else if (mode_idr_bits & (1 << PB_PAD_GPIO))
-			*selected_mode = MODE_PAD;
-		else if (mode_idr_bits & (1 << PB_PROG_CHNG_GPIO))
-			*selected_mode = MODE_PROG_CHNG;
-		else if (mode_idr_bits & (1 << PB_CC_GPIO))
-			*selected_mode = MODE_CC;
-	}
-}
-
-/**
  * @ 0x08005688
  * Progress: ALMOST DONE
  * TODO: Explain why a subtraction of 0x10 is performed
@@ -484,6 +448,88 @@ void write_midi_buffer(void *data, uint32_t size)
 		*remaining_space = (tail_addr - last_element_addr) - 0x10;
 	else
 		*remaining_space = last_element_addr - tail_addr;
+}
+
+/**
+ * @ 0x08003d10
+ * Progress: INCOMPLETE
+ */
+void FUN_08003d10(void)
+
+{
+	// byte bVar1;
+	// undefined2 uVar2;
+	// char *unknown_0_ptr;
+	// uint mode_pbs;
+
+	// unknown_0_ptr = unknown_0_addr; // 0x20000003
+	// if (*unknown_0_addr == '\0') {
+	// 	*unknown_0_addr = '\x04';
+	// 	mode_pbs = ~*(uint *)(DAT_08003d4c + 8) & 0x3c0;
+	// 	uVar2 = (undefined2)mode_pbs;
+	// 	if (*(ushort *)(unknown_0_ptr + 8) != mode_pbs) {
+	// 		unknown_0_ptr[2] = '\0';
+	// 		*(undefined2 *)(unknown_0_ptr + 8) = uVar2;
+	// 		return;
+	// 	}
+	// 	bVar1 = unknown_0_ptr[2];
+	// 	if ((bVar1 < 0xf0) && (unknown_0_ptr[2] = bVar1 + 1, bVar1 == 9)) {
+	// 		*(undefined2 *)(unknown_0_ptr + 0xc) = uVar2;
+	// 	}
+	// }
+	// return;
+
+	uint8_t *unknown_0 = UINT8_UNKNOWN_20000003;
+
+	if (! *unknown_0) {
+		*unknown_0 = 0x04;
+		// Read mode push buttons. Negation due to PU's.
+		uint32_t mode_pbs = ~(PB_GPIO_PORT->IDR) & PB_IDR_MSK;
+	}
+}
+
+/**
+ * @ 0x08003c80
+ * Progress: ALMOST DONE / AWAITING MORE INFO
+ * TODO: Resolve unknown_flag and what the SYSEx message does
+ */
+void eval_mode_pbs(void)
+{
+	const uint16_t mode_pbs = *(uint16_t *)UINT16_MODE_PB_IDR_BITS_CPY_20000048;
+	const uint8_t unknown_flag = *(uint8_t *)UINT8_UNKNOWN_FLAG_20000011;
+
+	unknown *prev_mode_pbs = UINT16_PREV_MODE_PADS_IDR_BITS_20000046;
+	mode_t *selected_mode = UINT8_SELECTED_MODE_2000003f;
+
+	if (*prev_mode_pbs != mode_pbs) {
+
+		*prev_mode_pbs = mode_pbs;
+
+		// Suspecting this is some sort of debug flag...
+		if (unknown_flag != 0) {
+
+			// Shift bits to start at bit 0. PROG is first GPIO.
+			uint8_t shifted2lsbits = (mode_pbs >> PB_PROG_GPIO);
+
+			// Terminates some sort of SysEx message that conveys mode pb gpio info??!
+			uint8_t data[12] = {0x04, 0x47, 0x00, 0x75, 0x04, 0x6b, 0x00, 0x02,
+			                    0x07, 0x5a, shifted2lsbits, 0xf7
+			                   };
+
+			return;
+		}
+
+		// Real code uses shift to MSB and then checks if negative
+		// Masks achieve the same result and are more readable
+		if (mode_pbs & (1 << PB_PROG_GPIO))
+			*selected_mode = MODE_PROG;
+		else if (mode_pbs & (1 << PB_PAD_GPIO))
+			*selected_mode = MODE_PAD;
+		else if (mode_pbs & (1 << PB_PROG_CHNG_GPIO))
+			*selected_mode = MODE_PROG_CHNG;
+		else if (mode_pbs & (1 << PB_CC_GPIO))
+			*selected_mode = MODE_CC;
+	}
 }
 
 /**
@@ -562,28 +608,28 @@ void update_pad_leds()
 			if (pad_state == PAD_STATE_PRESSED) {
 				switch (i) {
 				case 0:
-					GPIOB->ODR |= (1 << LED_PAD_1_GPIO);
+					LED_GPIO_PORT->ODR |= (1 << LED_PAD_1_GPIO);
 					break;
 				case 1:
-					GPIOB->ODR |= (1 << LED_PAD_2_GPIO);
+					LED_GPIO_PORT->ODR |= (1 << LED_PAD_2_GPIO);
 					break;
 				case 2:
-					GPIOB->ODR |= (1 << LED_PAD_3_GPIO);
+					LED_GPIO_PORT->ODR |= (1 << LED_PAD_3_GPIO);
 					break;
 				case 3:
-					GPIOB->ODR |= (1 << LED_PAD_4_GPIO);
+					LED_GPIO_PORT->ODR |= (1 << LED_PAD_4_GPIO);
 					break;
 				case 4:
-					GPIOB->ODR |= (1 << LED_PAD_5_GPIO);
+					LED_GPIO_PORT->ODR |= (1 << LED_PAD_5_GPIO);
 					break;
 				case 5:
-					GPIOB->ODR |= (1 << LED_PAD_6_GPIO);
+					LED_GPIO_PORT->ODR |= (1 << LED_PAD_6_GPIO);
 					break;
 				case 6:
-					GPIOB->ODR |= (1 << LED_PAD_7_GPIO);
+					LED_GPIO_PORT->ODR |= (1 << LED_PAD_7_GPIO);
 					break;
 				case 7:
-					GPIOB->ODR |= (1 << LED_PAD_8_GPIO);
+					LED_GPIO_PORT->ODR |= (1 << LED_PAD_8_GPIO);
 					break;
 				default:
 					break;
@@ -591,28 +637,28 @@ void update_pad_leds()
 			} else {
 				switch (i) {
 				case 0:
-					GPIOB->ODR &= ~(1 << LED_PAD_1_GPIO);
+					LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_1_GPIO);
 					break;
 				case 1:
-					GPIOB->ODR &= ~(1 << LED_PAD_2_GPIO);
+					LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_2_GPIO);
 					break;
 				case 2:
-					GPIOB->ODR &= ~(1 << LED_PAD_3_GPIO);
+					LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_3_GPIO);
 					break;
 				case 3:
-					GPIOB->ODR &= ~(1 << LED_PAD_4_GPIO);
+					LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_4_GPIO);
 					break;
 				case 4:
-					GPIOB->ODR &= ~(1 << LED_PAD_5_GPIO);
+					LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_5_GPIO);
 					break;
 				case 5:
-					GPIOB->ODR &= ~(1 << LED_PAD_6_GPIO);
+					LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_6_GPIO);
 					break;
 				case 6:
-					GPIOB->ODR &= ~(1 << LED_PAD_7_GPIO);
+					LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_7_GPIO);
 					break;
 				case 7:
-					GPIOB->ODR &= ~(1 << LED_PAD_8_GPIO);
+					LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_8_GPIO);
 					break;
 				default:
 					break;
@@ -654,9 +700,9 @@ void update_leds(void)
 		/* Check if mode has been switched */
 		if (*prev_mode != selected_mode) {
 			// Clear PB Pad LEDs
-			GPIOB->ODR &= ~(1 << LED_PB_PAD_GPIO);
-			GPIOB->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
-			GPIOB->ODR &= ~(1 << LED_PB_CC_GPIO);
+			LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PAD_GPIO);
+			LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
+			LED_GPIO_PORT->ODR &= ~(1 << LED_PB_CC_GPIO);
 
 			/*
 			 * Resets the 'prog_chng' fields of the 'pad_states' array to prevent Pad LEDs from
@@ -688,24 +734,24 @@ void update_leds(void)
 		// Set LEDs according to selected mode
 		switch (selected_mode) {
 		case MODE_PAD:
-			GPIOB->ODR |= (1 << LED_PB_PAD_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PB_PAD_GPIO);
 			break;
 		case MODE_CC:
-			GPIOB->ODR |= (1 << LED_PB_CC_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PB_CC_GPIO);
 			break;
 		case MODE_PROG_CHNG:
-			GPIOB->ODR |= (1 << LED_PB_PROG_CHNG_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PB_PROG_CHNG_GPIO);
 			break;
 		case MODE_PROG:
 			// Clear all Pad LEDs
-			GPIOB->ODR &= ~(1 << LED_PAD_1_GPIO);
-			GPIOB->ODR &= ~(1 << LED_PAD_2_GPIO);
-			GPIOB->ODR &= ~(1 << LED_PAD_3_GPIO);
-			GPIOB->ODR &= ~(1 << LED_PAD_4_GPIO);
-			GPIOB->ODR &= ~(1 << LED_PAD_5_GPIO);
-			GPIOB->ODR &= ~(1 << LED_PAD_6_GPIO);
-			GPIOB->ODR &= ~(1 << LED_PAD_7_GPIO);
-			GPIOB->ODR &= ~(1 << LED_PAD_8_GPIO);
+			LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_1_GPIO);
+			LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_2_GPIO);
+			LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_3_GPIO);
+			LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_4_GPIO);
+			LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_5_GPIO);
+			LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_6_GPIO);
+			LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_7_GPIO);
+			LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_8_GPIO);
 
 			if ((uint8_t *)PROG_1_SELECT_FLAG == 1)
 				*selected_prog = 1;
@@ -732,16 +778,16 @@ void update_leds(void)
 
 			switch (*selected_prog) {
 			case 1:
-				GPIOB->ODR |= (1 << LED_PAD_1_GPIO);
+				LED_GPIO_PORT->ODR |= (1 << LED_PAD_1_GPIO);
 				break;
 			case 2:
-				GPIOB->ODR |= (1 << LED_PAD_2_GPIO);
+				LED_GPIO_PORT->ODR |= (1 << LED_PAD_2_GPIO);
 				break;
 			case 3:
-				GPIOB->ODR |= (1 << LED_PAD_3_GPIO);
+				LED_GPIO_PORT->ODR |= (1 << LED_PAD_3_GPIO);
 				break;
 			case 4:
-				GPIOB->ODR |= (1 << LED_PAD_4_GPIO);
+				LED_GPIO_PORT->ODR |= (1 << LED_PAD_4_GPIO);
 				break;
 			default:
 				break;
@@ -754,51 +800,51 @@ void update_leds(void)
 		update_pad_leds();
 	} else {
 		/* Clear all LEDs */
-		GPIOB->ODR &= ~(1 << LED_PB_PAD_GPIO);
-		GPIOB->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
-		GPIOB->ODR &= ~(1 << LED_PB_CC_GPIO);
-		GPIOB->ODR &= ~(1 << LED_PAD_1_GPIO);
-		GPIOB->ODR &= ~(1 << LED_PAD_2_GPIO);
-		GPIOB->ODR &= ~(1 << LED_PAD_3_GPIO);
-		GPIOB->ODR &= ~(1 << LED_PAD_4_GPIO);
-		GPIOB->ODR &= ~(1 << LED_PAD_5_GPIO);
-		GPIOB->ODR &= ~(1 << LED_PAD_6_GPIO);
-		GPIOB->ODR &= ~(1 << LED_PAD_7_GPIO);
-		GPIOB->ODR &= ~(1 << LED_PAD_8_GPIO);
+		LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PAD_GPIO);
+		LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
+		LED_GPIO_PORT->ODR &= ~(1 << LED_PB_CC_GPIO);
+		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_1_GPIO);
+		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_2_GPIO);
+		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_3_GPIO);
+		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_4_GPIO);
+		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_5_GPIO);
+		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_6_GPIO);
+		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_7_GPIO);
+		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_8_GPIO);
 
 		switch (unknown_enum) {
 		case 1:
-			GPIOB->ODR |= (1 << LED_PB_PAD_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PB_PAD_GPIO);
 			break;
 		case 2:
-			GPIOB->ODR |= (1 << LED_PB_CC_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PB_CC_GPIO);
 			break;
 		case 3:
-			GPIOB->ODR |= (1 << LED_PB_PROG_CHNG_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PB_PROG_CHNG_GPIO);
 			break;
 		case 4:
-			GPIOB->ODR |= (1 << LED_PAD_1_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PAD_1_GPIO);
 			break;
 		case 5:
-			GPIOB->ODR |= (1 << LED_PAD_2_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PAD_2_GPIO);
 			break;
 		case 6:
-			GPIOB->ODR |= (1 << LED_PAD_3_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PAD_3_GPIO);
 			break;
 		case 7:
-			GPIOB->ODR |= (1 << LED_PAD_4_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PAD_4_GPIO);
 			break;
 		case 8:
-			GPIOB->ODR |= (1 << LED_PAD_5_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PAD_5_GPIO);
 			break;
 		case 9:
-			GPIOB->ODR |= (1 << LED_PAD_6_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PAD_6_GPIO);
 			break;
 		case 10:
-			GPIOB->ODR |= (1 << LED_PAD_7_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PAD_7_GPIO);
 			break;
 		case 11:
-			GPIOB->ODR |= (1 << LED_PAD_8_GPIO);
+			LED_GPIO_PORT->ODR |= (1 << LED_PAD_8_GPIO);
 			break;
 		default:
 			break;
@@ -830,17 +876,17 @@ void main_loop()
 
 				*prev_mode = MODE_UNSET;
 
-				GPIOB->ODR &= ~(1 << LED_PB_PAD_GPIO);
-				GPIOB->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
-				GPIOB->ODR &= ~(1 << LED_PB_CC_GPIO);
-				GPIOB->ODR &= ~(1 << LED_PAD_1_GPIO);
-				GPIOB->ODR &= ~(1 << LED_PAD_2_GPIO);
-				GPIOB->ODR &= ~(1 << LED_PAD_3_GPIO);
-				GPIOB->ODR &= ~(1 << LED_PAD_4_GPIO);
-				GPIOB->ODR &= ~(1 << LED_PAD_5_GPIO);
-				GPIOB->ODR &= ~(1 << LED_PAD_6_GPIO);
-				GPIOB->ODR &= ~(1 << LED_PAD_7_GPIO);
-				GPIOB->ODR &= ~(1 << LED_PAD_8_GPIO);
+				LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PAD_GPIO);
+				LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
+				LED_GPIO_PORT->ODR &= ~(1 << LED_PB_CC_GPIO);
+				LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_1_GPIO);
+				LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_2_GPIO);
+				LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_3_GPIO);
+				LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_4_GPIO);
+				LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_5_GPIO);
+				LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_6_GPIO);
+				LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_7_GPIO);
+				LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_8_GPIO);
 			}
 
 			FUN_080023fc();
