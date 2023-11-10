@@ -8,6 +8,7 @@
             <STATE NAME="SHOW_TABLE" TYPE="boolean" VALUE="false" />
         </SAVE_STATE>
     </PROJECT_DATA_XML_NAME>
+    <OPEN_VIEW NAME="LPD8-Firmware" LOCATION="/home/patrick/dev/LPD8-FW-Ghidra/ghidra" />
     <TOOL_MANAGER ACTIVE_WORKSPACE="Workspace">
         <WORKSPACE NAME="Workspace" ACTIVE="true" />
     </TOOL_MANAGER>
