@@ -54,16 +54,18 @@
 #define PB_CC_GPIO 9
 #define PB_IDR_MSK (1 << PB_PROG_GPIO) | (1 << PB_PAD_GPIO) | (1 << PB_PROG_CHNG_GPIO) | (1 << PB_CC_GPIO)
 
-#define ADC_CR1_OFFSET 0x4
-#define ADC_CR2_OFFSET 0x8
+#define ADC_CR1_OFFSET 0x04
+#define ADC_CR2_OFFSET 0x08
 #define ADC_SMPR1_OFFSET 0x0c
 #define ADC_SMPR2_OFFSET 0x10
 #define ADC_SQR1_OFFSET 0x2c
 #define ADC_SQR2_OFFSET 0x30
 #define ADC_SQR3_OFFSET 0x34
-#define GPIO_CRL_OFFSET 0x0
-#define GPIO_CRH_OFFSET 0x4
-#define GPIO_CR_CNF_MODE 0xF
+#define GPIO_CRL_OFFSET 0x00
+#define GPIO_CRH_OFFSET 0x04
+#define GPIO_CR_CNF_MODE 0x0F
+#define GPIO_BSRR_OFFSET 0x10
+#define GPIO_BRR_OFFSET 0x14
 
 #define MIDI_MAX_DATA_VAL 127 // 0x7F
 #define MIDI_BUFFER_SIZE 240  // 0xF0
@@ -90,6 +92,18 @@ typedef uint8_t mode_t;
 #define MODE_CC 0x2
 #define MODE_PROG_CHNG 0x3
 #define MODE_UNSET 0xFF
+
+typedef uint32_t gpio_operation_t;
+#define GPIO_CFG_OP_IN_ANALOG 0x00
+#define GPIO_CFG_OP_IN_PD 0x28
+#define GPIO_CFG_OP_IN_PU 0x48
+#define GPIO_CFG_OP_OTHER 0x10
+
+typedef struct {
+	uint32_t gpios;
+	uint32_t other_cr_bits; // CNF + MODE, only used if op == GPIO_CFG_OP_OTHER
+	gpio_operation_t op;
+} gpio_cfg;
 
 typedef struct {
 	pad_state_t state;
@@ -343,78 +357,80 @@ void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint
 
 /**
  * @ 0x080039aa
- * Progress: INCOMPLETE
- * TODO: Resolve unknown_ptr_0, understand cnfd_mode_bits and declare
- * 	 defines for GPIO reg offsets
+ * Progress: DONE
+ *
+ * The following function is used to configure a selection of GPIOs
+ * to a specific mode. To do so, the function takes a pointer to the
+ * GPIO base address and a pointer to a gpio_cfg struct as arguments.
+ * The gpio_cfg struct contains information about which GPIOs to configure
+ * and which mode to configure them to. The most important field of the
+ * gpio_cfg struct is the 'op' field, which must be set in accordance to
+ * the logic of this function. The GPIO_CFG_OP_* macros have been provided
+ * for this purpose.
+ *
+ * Honestly, the logic for this function is a bit convoluted. I would not
+ * be suprised if the compiler optimization is to blame for this.
  */
 
-//   local_34[0] = 0xff;
-//   local_2c = 0;
-//   FUN_080039aa(DAT_080023b4,local_34);
-//   local_34[0] = 0xf;
-//   local_2c = 0;
-//   FUN_080039aa(DAT_080023b8,local_34);
-//   local_34[0] = 0x3c;
-//   local_2c = 0;
-//   FUN_080039aa(DAT_080023bc,local_34);
-
-//                      DAT_080023b4                                    XREF[1]:     init_dma_adc:080021f4(R)
-// 080023b4 00 08 01 40     undefined4 40010800h
-//                      DAT_080023b8                                    XREF[1]:     init_dma_adc:08002204(R)
-// 080023b8 00 0c 01 40     undefined4 40010C00h
-//                      DAT_080023bc                                    XREF[1]:     init_dma_adc:08002214(R)
-// 080023bc 00 10 01 40     undefined4 40011000h
-void FUN_080039aa(uint32_t *gpio_base, uint16_t *gpio_msk, uint16_t *cnf_mode_msk)
+void cfg_gpios(uint32_t *gpio_base, gpio_cfg *gpio_cfg)
 {
-	uint32_t *unknown_ptr_0 = gpio_msk + 4;
-	uint8_t cnf_mode_bits = *unknown_ptr_0 & 0xf;
+	// By default, configure GPIOs to the mode specified
+	// by the lower 4 bits of the 'op' field
+	// Ex. for op == GPIO_CFG_OP_IN_PD or
+	// op == GPIO_CFG_OP_IN_PU, the lower 4 bits are 0x8,
+	// which corresponds to Input with Pull-Down/Pull-Up
+	// respectively
+	uint8_t cnf_mode_bits = gpio_cfg->op & 0x0F;
 
-	uint32_t *GPIO_BSRR = gpio_base + 0x10;
-	uint32_t *GPIO_BRR = gpio_base + 0x14;
-	uint32_t *GPIO_CRL = gpio_base + 0x00;
-	uint32_t *GPIO_CRH = gpio_base + 0x04;
+	uint32_t *GPIO_BSRR = gpio_base + GPIO_BSRR_OFFSET;
+	uint32_t *GPIO_BRR = gpio_base + GPIO_BRR_OFFSET;
+	uint32_t *GPIO_CRL = gpio_base + GPIO_CRL_OFFSET;
+	uint32_t *GPIO_CRH = gpio_base + GPIO_CRH_OFFSET;
 
-	// Check MSB
-	if ((*unknown_ptr_0 << 0x1b) < 0)
-		cnf_mode_bits |= *cnf_mode_msk;
+	// If GPIO_CFG_OP_OTHER is set, the cnf_mode bits
+	// are taken from the 'other_cr_bits' field instead
+	// From further code analysis, this case appears to
+	// only be used when configuring GPIOs as outputs
+	if (gpio_cfg->op & GPIO_CFG_OP_OTHER)
+		cnf_mode_bits |= gpio_cfg->other_cr_bits;
 
-	if (*gpio_msk & 0xFF) { // Check any of GPIO's 0-7 are selected in the mask
+	// Configure GPIO's 0-7, if any of them must be configured
+	if (gpio_cfg->gpios & 0xFF) {
 		uint32_t crl = *GPIO_CRL;
+
 		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++) {
 			uint8_t msk = 1 << i_gpio;
-			if ((*gpio_msk & msk)) {
+
+			if (gpio_cfg->gpios & msk) {
 				crl &= ~(GPIO_CR_CNF_MODE << (i_gpio * 4));
 				crl |= cnf_mode_bits << (i_gpio * 4);
 
-				if (*unknown_ptr_0 == 0x28)
-					*GPIO_BRR = msk;
-				else if (*unknown_ptr_0 == 0x48)
-					*GPIO_BSRR = msk;
+				if (gpio_cfg->op == GPIO_CFG_OP_IN_PD)
+					*GPIO_BRR = msk; // Set to Pull-Down
+				else if (gpio_cfg->op == GPIO_CFG_OP_IN_PU)
+					*GPIO_BSRR = msk; // Set to Pull-Up
 			}
 		}
 		*GPIO_CRL = crl;
 	}
 
-	if (*gpio_msk > 0xFF) {
-		// Check any of GPIO's 8-15 are selected in the mask
-
+	// Same logic as above, but for GPIO's 8-15
+	if (gpio_cfg->gpios > 0xFF) {
 		uint32_t crh = *GPIO_CRH;
 
 		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++) {
+			uint8_t msk = 1 << (i_gpio + 8); // + 8 due to GPIO's 8-15
 
-			uint8_t msk = 1 << (i_gpio + 8);
-
-			if ((*gpio_msk & msk)) {
+			if (gpio_cfg->gpios & msk) {
 				crh &= ~(GPIO_CR_CNF_MODE << (i_gpio * 4));
 				crh |= cnf_mode_bits << (i_gpio * 4);
 
-				if (*unknown_ptr_0 == 0x28)
+				if (gpio_cfg->op == GPIO_CFG_OP_IN_PD)
 					*GPIO_BRR = msk;
-				else if (*unknown_ptr_0 == 0x48)
+				else if (gpio_cfg->op == GPIO_CFG_OP_IN_PU)
 					*GPIO_BSRR = msk;
 			}
 		}
-
 		*GPIO_CRH = crh;
 	}
 }

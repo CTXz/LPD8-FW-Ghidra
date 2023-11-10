@@ -1,6 +1,3 @@
-IADD:00000002:/firmware.bin.1
-IDSET:/firmware.bin.1:c0a803a9f9293226890382
 IDEL:/firmware.bin
-IDEL:/firmware.bin.1
-IADD:00000003:/firmware.bin
-IDSET:/firmware.bin:c0a803925f297840348123
+IADD:00000004:/firmware.bin
+IDSET:/firmware.bin:c0a803b2cf377076726945
