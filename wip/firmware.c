@@ -11,9 +11,9 @@
 #define UINT8_UNKNOWN_FLAG_20000011 0x20000011
 #define UNKNOWN_ENUM_20000012 0x20000012
 #define UINT8_SYSTICK_DECREMENTER_0_20000018 0x20000018 // Decrements on every SysTick Interrupt
-#define UNKNOWN_20000019 0x20000019
+#define UINT8_8_UNKNOWN_20000019 0x20000019
 #define UNKNOWN_0x20000021 0x20000021
-#define UNKNOWN_20000029 0x20000029
+#define UINT8_8_PREV_KNOB_MIDI_VALS_20000029 0x20000029
 #define UINT8_PREV_MODE_0x20000031 0x20000031
 #define UINT8_PREV_SELECTED_PROG_20000032 0x20000032
 #define UINT8_8_PREV_PADS_STATE_20000033 0x20000033	// .. 0x2000003A
@@ -30,10 +30,10 @@
 #define UINT8_PTR_MIDI_BUFFER_TAIL_2000015c 0x2000015c
 #define UINT8_MIDI_BUFFER_END_2000024C 0x2000024C
 #define PROGRAM_SETTINGS_5_200003CC 0x200003CC
-#define UNKNOWN_200004EA 0x200004EA
+#define UINT16_8_PREV_ACCEPTED_KNOB_ADC_VALS_200004EA 0x200004EA
 #define PAD_MIDI_8_0x2000052a 0x2000052a
 #define PAD_STATES_8_20000552 0x20000552
-#define UNKNOWN_2000059A 0x2000059A
+#define UINT16_8_KNOB_ADC_VALS_2000059A 0x2000059A
 
 
 // TODO Examine data structure
@@ -81,11 +81,17 @@
 #define MODE_PB_SYSTICK_SCAN_INTERVALS 4
 #define MODE_PB_DEBOUNCE_THRESHOLD 10
 #define MODE_PB_DEBOUNCE_COUNT 240
+#define ADC_KNOB_CHANGE_THRESHOLD 7
 #define N_PADS 8
 #define N_KNOBS 8
 #define N_PADS_OR_KNOBS 8
 
+#define EXCEEDS_THRESHOLD(x, y, threshold) ((x) + (threshold) <= (y) || (y) + (threshold) <= (x))
+
 typedef uint32_t unknown; // So the linter doesn't complain
+
+typedef uint8_t midi_data_t; // Only 7 bits are used
+typedef uint16_t adc_val_t; // LPD8 configures ADC to 10-bit resolution
 
 typedef uint8_t pad_state_t;
 #define PAD_STATE_RELEASED 0
@@ -589,6 +595,9 @@ void FUN_08003b10(void)
 	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_20000042;
 	program_settings *all_prog_settings = PROGRAM_SETTINGS_5_200003CC;
 	program_settings *sel_prog_settings = &all_prog_settings[sel_prog];
+	midi_data_t *prev_knob_vals = UINT8_8_PREV_KNOB_MIDI_VALS_20000029;
+	adc_val_t *knob_adc_vals = UINT16_8_KNOB_ADC_VALS_2000059A;
+	adc_val_t *prev_accepted_knob_adc_vals = UINT16_8_PREV_ACCEPTED_KNOB_ADC_VALS_200004EA;
 
 	// Treat invalid MIDI channels as channel 0 (aka. 1)
 	if (sel_prog_settings->midi_ch > MIDI_MAX_CHANNEL)
@@ -596,69 +605,84 @@ void FUN_08003b10(void)
 
 	for (uint8_t i = 0; i < N_PADS_OR_KNOBS; i++) {
 		uint8_t *unknown_15 = sel_prog_settings + (i * sizeof(pad_settings));
-		// uint8_t unknown_7 = *(uint8_t *)(sel_prog_settings + 0x21 + (i * sizeof(knob_settings)));
-		uint8_t knob_note = sel_prog_settings->knobs[i].note;
-		uint32_t unknown_8 = (uint32_t) *(uint8_t *)(sel_prog_settings + 0x23 + (i * sizeof(knob_settings)));
-		uint32_t unknown_9 = (uint32_t) *(uint8_t *)(sel_prog_settings + 0x22 + (i * sizeof(knob_settings)));
-		uint8_t *unknown_16 = UNKNOWN_20000019 + i;
-		uint8_t *unknown_14 = UNKNOWN_20000029 + i;
-		uint16_t *unknown_17 = UNKNOWN_200004EA + i * 2;
-		uint16_t *unknown_18 = UNKNOWN_2000059A + i * 2;
-		const uint32_t unknown_11 = (uint32_t) *unknown_17;
-		const uint32_t unknown_10 = (uint32_t) *unknown_18;
 
-		if (unknown_7 != 0) {
-			if (unknown_10 + 7 <= unknown_11 ||
-			    unknown_11 + 7 <= unknown_10) {
-				if (unknown_9 < unknown_8) {
-					uint8_t delta_8_9_plus_1 = (unknown_8 - unknown_9) + 1;
-					unknown_9 += (unknown_10 * delta_8_9_plus_1) / 0x3f7 & 0xff;
-					if (unknown_8 < unknown_9) {
-						unknown_9 = unknown_8;
+		uint8_t knob_cc = sel_prog_settings->knobs[i].cc;
+		uint8_t knob_max = sel_prog_settings->knobs[i].max;
+		uint8_t knob_min = sel_prog_settings->knobs[i].min;
+
+		uint8_t *unknown_16 = UINT8_8_UNKNOWN_20000019 + i;
+		midi_data_t *prev_knob_val = prev_knob_val[i];
+		adc_val_t *prev_accepted_knob_adc_val = &prev_accepted_knob_adc_vals[i];
+		adc_val_t *knob_adc_val = &knob_adc_vals[i];
+
+		const uint32_t _prev_accepted_knob_adc_val = (uint32_t) *prev_accepted_knob_adc_val;
+		const uint32_t _knob_adc_val = (uint32_t) *knob_adc_val;
+
+		// Knobs with CC 0 are ignored/disabled
+		if (knob_cc == 0)
+			continue;
+
+		// Only update if knob has been moved beyond threshold
+		if (!EXCEEDS_THRESHOLD(
+		        _knob_adc_val,
+		        _prev_accepted_knob_adc_val,
+		        ADC_KNOB_CHANGE_THRESHOLD
+		    ))
+			continue;
+
+		if (knob_min < knob_max) {
+			uint8_t d_min_max_plus_1 = (knob_max - knob_min) + 1;
+			knob_min += (_knob_adc_val * d_min_max_plus_1) / 0x3f7;
+
+			if (knob_max < knob_min)
+				knob_min = knob_max;
+		} else {
+			uint8_t d_min_max_plus_1 = (knob_max - knob_min) + 1;
+			knob_min -= ((_knob_adc_val * d_min_max_plus_1) / 0x3f7);
+
+			if (knob_max > knob_min)
+				knob_min = knob_max;
+		}
+
+		if (knob_min > 0x7f)
+			knob_min = 0x7f;
+
+		uint32_t unknown_6 = UNKNOWN_0x20000021;
+		uint8_t unknown_13 = *unknown_15;
+
+		if (unknown_13 != knob_min) {
+
+			if (*prev_knob_val == knob_min) {
+
+				if (*unknown_16 != 0) {
+
+					if (_prev_accepted_knob_adc_val < _knob_adc_val + 0xf &&
+					    _knob_adc_val < _prev_accepted_knob_adc_val + 0xf) {
+						continue;
 					}
-				} else {
-					uint16_t unknown_12 = (uint16_t) *(uint8_t *)(sel_prog_settings + 0x22 + (i * sizeof(knob_settings))) -
-					                      (uint16_t)((unknown_10 * ((unknown_9 - unknown_8) + 1 & 0xff)) / 0x3f7);
-					unknown_9 = unknown_8;
-					if (unknown_8 <= unknown_12) {
-						unknown_9 = (uint32_t)(uint8_t)unknown_12;
-					}
+
+					*unknown_16 = 0;
 				}
-				if (unknown_9 > 0x7f) {
-					unknown_9 = 0x7f;
-				}
 
-				uint32_t unknown_6 = UNKNOWN_0x20000021;
-				uint8_t unknown_13 = *unknown_15;
+				*unknown_16 = 1;
+			} else {
+				*unknown_16 = 0;
+			}
 
-				if (unknown_13 != unknown_9) {
-					if (*unknown_14 == unknown_9) {
-						if (*unknown_16 != 0) {
-							if (unknown_11 < unknown_10 + 0xf &&
-							    unknown_10 < unknown_11 + 0xf) {
-								continue;
-							}
-							*unknown_16 = 0;
-						}
-						*unknown_16 = 1;
-					} else {
-						*unknown_16 = 0;
-					}
+			*prev_knob_val = unknown_13;
+			*unknown_15 = (uint8_t)knob_min;
 
-					*unknown_14 = unknown_13;
-					*unknown_15 = (uint8_t)unknown_9;
+			if (*systick_decr_0 == 0) {
 
-					if (*systick_decr_0 == 0) {
-						if (unknown_7 > 0x7f) {
-							unknown_7 = 0x7f;
-						}
-						uint32_t data = CONCAT13((char)unknown_9,CONCAT12(unknown_7,CONCAT11(midi_ch,0xb))) | 0xb000;
-						write_midi_buffer(&data,4);
-					}
-				}
-				*unknown_18 = unknown_11;
+				if (knob_cc > 0x7f)
+					knob_cc = 0x7f;
+
+				uint32_t data = CONCAT13((char)knob_min,CONCAT12(knob_cc,CONCAT11(midi_ch,0xb))) | 0xb000;
+				write_midi_buffer(&data,4);
 			}
 		}
+
+		*knob_adc_val = *prev_accepted_knob_adc_val; // TODO: Check if this is correct
 	}
 
 }
