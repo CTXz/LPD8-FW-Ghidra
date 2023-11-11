@@ -8,25 +8,33 @@
 #define UINT8_MIDI_BUFFER_REMAINING_SPACE_20000004 0x20000004
 #define UINT8_PTR_PTR_MIDI_BUFFER_HEAD_20000008 0x20000008
 #define UINT8_PTR_PTR_MIDI_BUFFER_TAIL_2000000c 0x2000000c // buffer_end - MIDI_BUFFER_SIZE
-#define UINT8_PTR_MIDI_BUFFER_TAIL_2000015c 0x2000015c
 #define UINT8_UNKNOWN_FLAG_20000011 0x20000011
 #define UNKNOWN_ENUM_20000012 0x20000012
 #define UINT8_SYSTICK_DECREMENTER_0_20000018 0x20000018 // Decrements on every SysTick Interrupt
+#define UNKNOWN_20000019 0x20000019
+#define UNKNOWN_0x20000021 0x20000021
+#define UNKNOWN_20000029 0x20000029
 #define UINT8_PREV_MODE_0x20000031 0x20000031
 #define UINT8_PREV_SELECTED_PROG_20000032 0x20000032
 #define UINT8_8_PREV_PADS_STATE_20000033 0x20000033	// .. 0x2000003A
 #define UINT8_SYSTICK_DECREMENTER_1_2000003c 0x2000003c // Decrements on every SysTick Interrupt
 #define UINT8_DEBOUNCE_COUNTER_2000003e 0x2000003e
 #define UINT8_SELECTED_MODE_2000003f 0x2000003f
+#define UNKNOWN_20000040 0x20000040
 #define UINT8_SELECTED_PROG_20000042 0x20000042
 #define UINT8_PREV_MODE_20000043 0x20000043
 #define UINT16_PREV_MODE_PB_IDR_BITS_20000044 0x20000044
 #define UINT16_PREV_MODE_PB_IDR_BITS_20000046 0x20000046
 #define UINT16_MODE_PB_IDR_BITS_CPY_20000048 0x20000048
 #define UINT8_UNKNOWN_FLAG_20000098 0x20000098
+#define UINT8_PTR_MIDI_BUFFER_TAIL_2000015c 0x2000015c
 #define UINT8_MIDI_BUFFER_END_2000024C 0x2000024C
+#define PROGRAM_SETTINGS_5_200003CC 0x200003CC
+#define UNKNOWN_200004EA 0x200004EA
 #define PAD_MIDI_8_0x2000052a 0x2000052a
 #define PAD_STATES_8_20000552 0x20000552
+#define UNKNOWN_2000059A 0x2000059A
+
 
 // TODO Examine data structure
 #define PROG_4_SELECT_FLAG 0x2000050c		    // uint8_t
@@ -67,11 +75,15 @@
 #define GPIO_BSRR_OFFSET 0x10
 #define GPIO_BRR_OFFSET 0x14
 
+#define MIDI_MAX_CHANNEL 15   // 0xF
 #define MIDI_MAX_DATA_VAL 127 // 0x7F
 #define MIDI_BUFFER_SIZE 240  // 0xF0
 #define MODE_PB_SYSTICK_SCAN_INTERVALS 4
 #define MODE_PB_DEBOUNCE_THRESHOLD 10
 #define MODE_PB_DEBOUNCE_COUNT 240
+#define N_PADS 8
+#define N_KNOBS 8
+#define N_PADS_OR_KNOBS 8
 
 typedef uint32_t unknown; // So the linter doesn't complain
 
@@ -99,6 +111,10 @@ typedef uint32_t gpio_operation_t;
 #define GPIO_CFG_OP_IN_PU 0x48
 #define GPIO_CFG_OP_OTHER 0x10
 
+typedef uint8_t push_setting_t;
+#define MOMENTARY 0x0
+#define TOGGLE 0x1
+
 typedef struct {
 	uint32_t gpios;
 	uint32_t other_cr_bits; // CNF + MODE, only used if op == GPIO_CFG_OP_OTHER
@@ -121,6 +137,25 @@ typedef struct {
 	pad_state_t pad;       // offset: 3
 	pad_state_t cc;	       // offset: 4
 } pad_states;
+
+typedef struct {
+	uint8_t note;
+	uint8_t pc;
+	uint8_t cc;
+	push_setting_t type;
+} pad_settings;
+
+typedef struct {
+	uint8_t cc;
+	uint8_t min;
+	uint8_t max;
+} knob_settings;
+
+typedef struct {
+	uint8_t midi_ch;
+	pad_settings pads[N_PADS];
+	knob_settings knobs[N_KNOBS];
+} program_settings;
 
 /**
  * @ 0x08004e7c, Called by IVT Entry @ 0x0800203c
@@ -480,6 +515,155 @@ void write_midi_buffer(void *data, uint32_t size)
 		*remaining_space = last_element_addr - tail_addr;
 }
 
+
+/**
+ * @ 0x08003b10
+ * Progress: INCOMPLETE
+ *
+ * Unknown 57 byte large struct starting at 0x20000405:
+ *
+ * Program 1:
+ * 0x20000405:     0x00    0x24    0x00    0x01    0x00    0x25    0x01    0x02
+ * 0x2000040d:     0x00    0x26    0x02    0x03    0x00    0x27    0x03    0x04
+ * 0x20000415:     0x00    0x28    0x04    0x05    0x00    0x29    0x05    0x06
+ * 0x2000041d:     0x00    0x2a    0x06    0x08    0x00    0x2b    0x07    0x09
+ * 0x20000425:     0x00    0x01    0x00    0x7f    0x02    0x00    0x7f    0x03
+ * 0x2000042d:     0x00    0x7f    0x04    0x00    0x7f    0x05    0x00    0x7f
+ * 0x20000435:     0x06    0x00    0x7f    0x07    0x00    0x7f    0x08    0x00
+ * 0x2000043d:     0x7f
+ *
+ * Program 2:
+ * 0x2000043e:     0x01    0x23    0x00    0x01    0x00    0x24    0x01    0x02
+ * 0x20000446:     0x00    0x2a    0x02    0x03    0x00    0x27    0x03    0x04
+ * 0x2000044e:     0x00    0x25    0x04    0x05    0x00    0x26    0x05    0x06
+ * 0x20000456:     0x00    0x2e    0x06    0x08    0x00    0x2c    0x07    0x09
+ * 0x2000045e:     0x00    0x01    0x00    0x7f    0x02    0x00    0x7f    0x03
+ * 0x20000466:     0x00    0x7f    0x04    0x00    0x7f    0x05    0x00    0x7f
+ * 0x2000046e:     0x06    0x00    0x7f    0x07    0x00    0x7f    0x08    0x00
+ * 0x20000476:     0x7f
+ *
+ * Program 3:
+ * 0x20000477:     0x02    0x3c    0x00    0x01    0x00    0x3e    0x01    0x02
+ * 0x2000047f:     0x00    0x40    0x02    0x03    0x00    0x41    0x03    0x04
+ * 0x20000487:     0x00    0x43    0x04    0x05    0x00    0x45    0x05    0x06
+ * 0x2000048f:     0x00    0x47    0x06    0x08    0x00    0x48    0x07    0x09
+ * 0x20000497:     0x00    0x01    0x00    0x7f    0x02    0x00    0x7f    0x03
+ * 0x2000049f:     0x00    0x7f    0x04    0x00    0x7f    0x05    0x00    0x7f
+ * 0x200004a7:     0x06    0x00    0x7f    0x07    0x00    0x7f    0x08    0x00
+ * 0x200004af:     0x7f
+ *
+ * Program 4:
+ * 0x200004b0:     0x03    0x24    0x00    0x01    0x00    0x26    0x01    0x02
+ * 0x200004b8:     0x00    0x28    0x02    0x03    0x00    0x29    0x03    0x04
+ * 0x200004c0:     0x00    0x2b    0x04    0x05    0x00    0x2d    0x05    0x06
+ * 0x200004c8:     0x00    0x2f    0x06    0x08    0x00    0x30    0x07    0x09
+ * 0x200004d0:     0x00    0x01    0x00    0x7f    0x02    0x00    0x7f    0x03
+ * 0x200004d8:     0x00    0x7f    0x04    0x00    0x7f    0x05    0x00    0x7f
+ * 0x200004e0:     0x06    0x00    0x7f    0x07    0x00    0x7f    0x08    0x00
+ * 0x200004e8:     0x7f
+ *
+ * 0x00		: Midi Channel (Convention: 0x0 = 1)
+ * 0x01 - 0x20	: For each pad
+ * 			0x00: Note Number
+ * 			0x01: PC Number
+ * 			0x02: CC Number
+ * 			0x03: Momentary/Toggle (0x0 = Momentary, 0x1 = Toggle)
+ * 0x21 - 0x39 : For each knob
+ * 			0x00: CC Value
+ * 			0x01: Min. Value
+ * 			0x02: Max. Value
+ *
+ */
+void FUN_08003b10(void)
+{
+	uint8_t *systick_decr_0 = UINT8_SYSTICK_DECREMENTER_0_20000018;
+	unknown *unknown_0 = UNKNOWN_20000040;
+
+	// Appears to be reset after intervals of 4 calls
+	// Probably SysTick related
+	if (*unknown_0 != 1)
+		return;
+
+	*unknown_0 = 0;
+
+	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_20000042;
+	program_settings *all_prog_settings = PROGRAM_SETTINGS_5_200003CC;
+	program_settings *sel_prog_settings = &all_prog_settings[sel_prog];
+
+	// Treat invalid MIDI channels as channel 0 (aka. 1)
+	if (sel_prog_settings->midi_ch > MIDI_MAX_CHANNEL)
+		sel_prog_settings->midi_ch = 0;
+
+	for (uint8_t i = 0; i < N_PADS_OR_KNOBS; i++) {
+		uint8_t *unknown_15 = sel_prog_settings + (i * sizeof(pad_settings));
+		// uint8_t unknown_7 = *(uint8_t *)(sel_prog_settings + 0x21 + (i * sizeof(knob_settings)));
+		uint8_t knob_note = sel_prog_settings->knobs[i].note;
+		uint32_t unknown_8 = (uint32_t) *(uint8_t *)(sel_prog_settings + 0x23 + (i * sizeof(knob_settings)));
+		uint32_t unknown_9 = (uint32_t) *(uint8_t *)(sel_prog_settings + 0x22 + (i * sizeof(knob_settings)));
+		uint8_t *unknown_16 = UNKNOWN_20000019 + i;
+		uint8_t *unknown_14 = UNKNOWN_20000029 + i;
+		uint16_t *unknown_17 = UNKNOWN_200004EA + i * 2;
+		uint16_t *unknown_18 = UNKNOWN_2000059A + i * 2;
+		const uint32_t unknown_11 = (uint32_t) *unknown_17;
+		const uint32_t unknown_10 = (uint32_t) *unknown_18;
+
+		if (unknown_7 != 0) {
+			if (unknown_10 + 7 <= unknown_11 ||
+			    unknown_11 + 7 <= unknown_10) {
+				if (unknown_9 < unknown_8) {
+					uint8_t delta_8_9_plus_1 = (unknown_8 - unknown_9) + 1;
+					unknown_9 += (unknown_10 * delta_8_9_plus_1) / 0x3f7 & 0xff;
+					if (unknown_8 < unknown_9) {
+						unknown_9 = unknown_8;
+					}
+				} else {
+					uint16_t unknown_12 = (uint16_t) *(uint8_t *)(sel_prog_settings + 0x22 + (i * sizeof(knob_settings))) -
+					                      (uint16_t)((unknown_10 * ((unknown_9 - unknown_8) + 1 & 0xff)) / 0x3f7);
+					unknown_9 = unknown_8;
+					if (unknown_8 <= unknown_12) {
+						unknown_9 = (uint32_t)(uint8_t)unknown_12;
+					}
+				}
+				if (unknown_9 > 0x7f) {
+					unknown_9 = 0x7f;
+				}
+
+				uint32_t unknown_6 = UNKNOWN_0x20000021;
+				uint8_t unknown_13 = *unknown_15;
+
+				if (unknown_13 != unknown_9) {
+					if (*unknown_14 == unknown_9) {
+						if (*unknown_16 != 0) {
+							if (unknown_11 < unknown_10 + 0xf &&
+							    unknown_10 < unknown_11 + 0xf) {
+								continue;
+							}
+							*unknown_16 = 0;
+						}
+						*unknown_16 = 1;
+					} else {
+						*unknown_16 = 0;
+					}
+
+					*unknown_14 = unknown_13;
+					*unknown_15 = (uint8_t)unknown_9;
+
+					if (*systick_decr_0 == 0) {
+						if (unknown_7 > 0x7f) {
+							unknown_7 = 0x7f;
+						}
+						uint32_t data = CONCAT13((char)unknown_9,CONCAT12(unknown_7,CONCAT11(midi_ch,0xb))) | 0xb000;
+						write_midi_buffer(&data,4);
+					}
+				}
+				*unknown_18 = unknown_11;
+			}
+		}
+	}
+
+}
+
+
 /**
  * @ 0x08003d10
  * Progress: DONE
@@ -575,10 +759,10 @@ void eval_mode_pbs(void)
  */
 void rst_pads(void)
 {
-	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;	 // -> pad_midi[8]
-	pad_states *pads_states = PAD_STATES_8_20000552; // -> pad_states[8]
+	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;	 // -> pad_midi[N_PADS]
+	pad_states *pads_states = PAD_STATES_8_20000552; // -> pad_states[N_PADS]
 
-	for (uint8_t i = 0; i < 8; i++) {
+	for (uint8_t i = 0; i < N_PADS; i++) {
 		if (pads_midi[i].state == PAD_STATE_PRESSED) {
 			pads_midi[i].state = PAD_STATE_RELEASED;
 			pads_states[i].unknown0 = 0;
@@ -611,11 +795,11 @@ void update_pad_leds()
 	const mode_t selected_mode = *(uint8_t *)UINT8_SELECTED_MODE_2000003f; // uint8_t
 
 	mode_t *prev_mode = UINT8_PREV_MODE_0x20000031;			 // uint8_t
-	pad_state_t *prev_pads_state = UINT8_8_PREV_PADS_STATE_20000033; // -> pad_state_t[8]
-	pad_states *pads_states = PAD_STATES_8_20000552;		 // -> pad_states[8]
+	pad_state_t *prev_pads_state = UINT8_8_PREV_PADS_STATE_20000033; // -> pad_state_t[N_PADS]
+	pad_states *pads_states = PAD_STATES_8_20000552;		 // -> pad_states[N_PADS]
 
 	// For every Pad
-	for (uint8_t i = 0; i < 8; i++) {
+	for (uint8_t i = 0; i < N_PADS; i++) {
 		pad_state_t pad_state;
 
 		switch (selected_mode) {
@@ -629,7 +813,7 @@ void update_pad_leds()
 			pad_state = pads_states[i].prog_chng;
 			break;
 		default:
-			for (uint8_t j = 0; j < 8; j++) {
+			for (uint8_t j = 0; j < N_PADS; j++) {
 				prev_pads_state[j] = PAD_STATE_UNSET;
 			}
 
@@ -728,8 +912,8 @@ void update_leds(void)
 	mode_t *prev_mode = UINT8_PREV_MODE_20000043;			 // -> uint8_t
 	uint8_t *selected_prog = UINT8_SELECTED_PROG_20000042;		 // -> uint8_t
 	uint8_t *prev_selected_prog = UINT8_PREV_SELECTED_PROG_20000032; // -> uint8_t
-	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;			 // -> pad_midi[8]
-	pad_states *pads_states = PAD_STATES_8_20000552;		 // -> pad_states[8]
+	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;			 // -> pad_midi[N_PADS]
+	pad_states *pads_states = PAD_STATES_8_20000552;		 // -> pad_states[N_PADS]
 
 	// I have yet to find out what sets this flag != 0
 	if (unknown_flag == 0) {
@@ -761,7 +945,7 @@ void update_leds(void)
 			 * 	or
 			 * 	2. Change the MIDI logic to behave like the LED logic
 			 */
-			for (uint8_t i = 0; i < 8; i++) {
+			for (uint8_t i = 0; i < N_PADS; i++) {
 				pads_states[i].prog_chng = 0;
 			}
 			*prev_mode = selected_mode;
@@ -802,7 +986,7 @@ void update_leds(void)
 				rst_pads();
 
 				// Reset states of all pads
-				for (uint8_t i = 0; i < 8; i++) {
+				for (uint8_t i = 0; i < N_PADS; i++) {
 					pads_midi[i].state = PAD_STATE_RELEASED;
 					pads_states[i].unknown0 = 0;
 					pads_states[i].unknown1 = 0;
