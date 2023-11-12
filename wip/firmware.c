@@ -16,7 +16,7 @@
 #define UINT8_8_PREV_PREV_SCALED_KNOB_VALS_20000029 0x20000029
 #define UINT8_PREV_MODE_0x20000031 0x20000031
 #define UINT8_PREV_SELECTED_PROG_20000032 0x20000032
-#define UINT8_8_PREV_PADS_STATE_20000033 0x20000033	// .. 0x2000003A
+#define UINT8_8_PREV_PADS_STATE_20000033 0x20000033
 #define UINT8_SYSTICK_DECREMENTER_1_2000003c 0x2000003c // Decrements on every SysTick Interrupt
 #define UINT8_DEBOUNCE_COUNTER_2000003e 0x2000003e
 #define UINT8_SELECTED_MODE_2000003f 0x2000003f
@@ -34,7 +34,6 @@
 #define PAD_MIDI_8_0x2000052a 0x2000052a
 #define PAD_STATES_8_20000552 0x20000552
 #define UINT16_8_KNOB_ADC_VALS_2000059A 0x2000059A
-
 
 // TODO Examine data structure
 #define PROG_4_SELECT_FLAG 0x2000050c		    // uint8_t
@@ -60,7 +59,10 @@
 #define PB_PAD_GPIO 7
 #define PB_PROG_CHNG_GPIO 8
 #define PB_CC_GPIO 9
-#define PB_IDR_MSK (1 << PB_PROG_GPIO) | (1 << PB_PAD_GPIO) | (1 << PB_PROG_CHNG_GPIO) | (1 << PB_CC_GPIO)
+#define PB_IDR_MSK (1 << PB_PROG_GPIO) \
+		 | (1 << PB_PAD_GPIO) \
+		 | (1 << PB_PROG_CHNG_GPIO) \
+		 | (1 << PB_CC_GPIO)
 
 #define ADC_CR1_OFFSET 0x04
 #define ADC_CR2_OFFSET 0x08
@@ -88,8 +90,8 @@
 #define N_KNOBS 8
 #define N_PADS_OR_KNOBS 8
 
+// #define EXCEEDS_THRESHOLD(x, y, threshold) ((x) < (y) + (threshold) || (y) < (x) + (threshold))
 #define EXCEEDS_THRESHOLD(x, y, threshold) ((x) + (threshold) <= (y) || (y) + (threshold) <= (x))
-// #define EXCEEDS_THRESHOLD_2(x, y, threshold) ((x) < (y) + (threshold) || (y) < (x) + (threshold))
 
 typedef uint32_t unknown; // So the linter doesn't complain
 
@@ -319,23 +321,23 @@ void DMA_set_DIR_CIRC_PINC_MINC_PSIZE_MSIZE_PL_MEM2MEM_CNDTR_CPAR_CMAR(
 	uint32_t *dma_cpar = dma_cndtr + 0x4;
 	uint32_t *dma_cmar = dma_cpar + 0x4;
 
-	*dma_ccr &= ~(DMA_CCR_DIR |
-	              DMA_CCR_CIRC |
-	              DMA_CCR_PINC |
-	              DMA_CCR_MINC |
-	              DMA_CCR_PSIZE |
-	              DMA_CCR_MSIZE |
-	              DMA_CCR_PL |
-	              DMA_CCR_MEM2MEM);
+	*dma_ccr &= ~(DMA_CCR_DIR
+	              | DMA_CCR_CIRC
+	              | DMA_CCR_PINC
+	              | DMA_CCR_MINC
+	              | DMA_CCR_PSIZE
+	              | DMA_CCR_MSIZE
+	              | DMA_CCR_PL
+	              | DMA_CCR_MEM2MEM);
 
-	*dma_ccr |= dir_msk |
-	            circ_msk |
-	            pinc_msk |
-	            minc_msk |
-	            psize_msk |
-	            msize_msk |
-	            pl_msk |
-	            mem2mem_msk;
+	*dma_ccr |= dir_msk
+	            | circ_msk
+	            | pinc_msk
+	            | minc_msk
+	            | psize_msk
+	            | msize_msk
+	            | pl_msk
+	            | mem2mem_msk;
 
 	*dma_cndtr = cndtr;
 	*dma_cpar = cpar;
@@ -370,6 +372,7 @@ void RCC_set_AHBENR(uint32_t msk, bool set)
  * @ 0x080024e4
  * Progress: ALMOST DONE
  * TODO: Explain the seemingly "magic" multiplications and subtractions
+ * 	 Quick reference to datasheet should do it.
  */
 void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint32_t smp_bits)
 {
@@ -433,7 +436,7 @@ void cfg_gpios(uint32_t *gpio_base, gpio_cfg *gpio_cfg)
 
 	// If GPIO_CFG_OP_OTHER is set, the cnf_mode bits
 	// are taken from the 'other_cr_bits' field instead
-	// From further code analysis, this case appears to
+	// From further code analysis: This case appears to
 	// only be used when configuring GPIOs as outputs
 	if (gpio_cfg->op & GPIO_CFG_OP_OTHER)
 		cnf_mode_bits |= gpio_cfg->other_cr_bits;
@@ -528,7 +531,7 @@ void write_midi_buffer(void *data, uint32_t size)
 /**
  * @ 0x08003b10
  * Progress: ALMOST DONE / AWAITING MORE INFO
- * TODO: Confirm purpose of ready flag
+ * TODO: Confirm purpose of ready flag,
  * 	 Understand addition of 1 to range
  */
 void eval_knobs(void)
@@ -717,7 +720,7 @@ void read_mode_pbs(void)
 	}
 
 	/*
-	 * Debouncing/Bounce filtering?
+	 * Debouncing/Bounce-filtering?
 	 * The following code likely ensures stable mode push button states
 	 * by applying changes only if the buttons have maintained the same
 	 * state for at least MODE_PB_DEBOUNCE_THRESHOLD executions.
