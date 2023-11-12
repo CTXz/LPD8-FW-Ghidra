@@ -11,9 +11,9 @@
 #define UINT8_UNKNOWN_FLAG_20000011 0x20000011
 #define UNKNOWN_ENUM_20000012 0x20000012
 #define UINT8_SYSTICK_DECREMENTER_0_20000018 0x20000018 // Decrements on every SysTick Interrupt
-#define UINT8_8_UNKNOWN_20000019 0x20000019
-#define UNKNOWN_0x20000021 0x20000021
-#define UINT8_8_PREV_KNOB_MIDI_VALS_20000029 0x20000029
+#define BOOL_8_SCALED_KNOB_VALS_CHANGED_20000019 0x20000019
+#define UINT8_8_PREV_SCALED_KNOB_VALS_20000021 0x20000021
+#define UINT8_8_PREV_PREV_SCALED_KNOB_VALS_20000029 0x20000029
 #define UINT8_PREV_MODE_0x20000031 0x20000031
 #define UINT8_PREV_SELECTED_PROG_20000032 0x20000032
 #define UINT8_8_PREV_PADS_STATE_20000033 0x20000033	// .. 0x2000003A
@@ -82,11 +82,14 @@
 #define MODE_PB_DEBOUNCE_THRESHOLD 10
 #define MODE_PB_DEBOUNCE_COUNT 240
 #define ADC_KNOB_CHANGE_THRESHOLD 7
+#define ADC_KNOB_NOISE_GATE 15 // 0x0F
+#define MAX_ADC_KNOB_VAL 0x3FF
 #define N_PADS 8
 #define N_KNOBS 8
 #define N_PADS_OR_KNOBS 8
 
 #define EXCEEDS_THRESHOLD(x, y, threshold) ((x) + (threshold) <= (y) || (y) + (threshold) <= (x))
+// #define EXCEEDS_THRESHOLD_2(x, y, threshold) ((x) < (y) + (threshold) || (y) < (x) + (threshold))
 
 typedef uint32_t unknown; // So the linter doesn't complain
 
@@ -153,8 +156,8 @@ typedef struct {
 
 typedef struct {
 	uint8_t cc;
-	uint8_t min;
-	uint8_t max;
+	uint8_t leftmost;
+	uint8_t rightmost;
 } knob_settings;
 
 typedef struct {
@@ -524,94 +527,44 @@ void write_midi_buffer(void *data, uint32_t size)
 
 /**
  * @ 0x08003b10
- * Progress: INCOMPLETE
- *
- * Unknown 57 byte large struct starting at 0x20000405:
- *
- * Program 1:
- * 0x20000405:     0x00    0x24    0x00    0x01    0x00    0x25    0x01    0x02
- * 0x2000040d:     0x00    0x26    0x02    0x03    0x00    0x27    0x03    0x04
- * 0x20000415:     0x00    0x28    0x04    0x05    0x00    0x29    0x05    0x06
- * 0x2000041d:     0x00    0x2a    0x06    0x08    0x00    0x2b    0x07    0x09
- * 0x20000425:     0x00    0x01    0x00    0x7f    0x02    0x00    0x7f    0x03
- * 0x2000042d:     0x00    0x7f    0x04    0x00    0x7f    0x05    0x00    0x7f
- * 0x20000435:     0x06    0x00    0x7f    0x07    0x00    0x7f    0x08    0x00
- * 0x2000043d:     0x7f
- *
- * Program 2:
- * 0x2000043e:     0x01    0x23    0x00    0x01    0x00    0x24    0x01    0x02
- * 0x20000446:     0x00    0x2a    0x02    0x03    0x00    0x27    0x03    0x04
- * 0x2000044e:     0x00    0x25    0x04    0x05    0x00    0x26    0x05    0x06
- * 0x20000456:     0x00    0x2e    0x06    0x08    0x00    0x2c    0x07    0x09
- * 0x2000045e:     0x00    0x01    0x00    0x7f    0x02    0x00    0x7f    0x03
- * 0x20000466:     0x00    0x7f    0x04    0x00    0x7f    0x05    0x00    0x7f
- * 0x2000046e:     0x06    0x00    0x7f    0x07    0x00    0x7f    0x08    0x00
- * 0x20000476:     0x7f
- *
- * Program 3:
- * 0x20000477:     0x02    0x3c    0x00    0x01    0x00    0x3e    0x01    0x02
- * 0x2000047f:     0x00    0x40    0x02    0x03    0x00    0x41    0x03    0x04
- * 0x20000487:     0x00    0x43    0x04    0x05    0x00    0x45    0x05    0x06
- * 0x2000048f:     0x00    0x47    0x06    0x08    0x00    0x48    0x07    0x09
- * 0x20000497:     0x00    0x01    0x00    0x7f    0x02    0x00    0x7f    0x03
- * 0x2000049f:     0x00    0x7f    0x04    0x00    0x7f    0x05    0x00    0x7f
- * 0x200004a7:     0x06    0x00    0x7f    0x07    0x00    0x7f    0x08    0x00
- * 0x200004af:     0x7f
- *
- * Program 4:
- * 0x200004b0:     0x03    0x24    0x00    0x01    0x00    0x26    0x01    0x02
- * 0x200004b8:     0x00    0x28    0x02    0x03    0x00    0x29    0x03    0x04
- * 0x200004c0:     0x00    0x2b    0x04    0x05    0x00    0x2d    0x05    0x06
- * 0x200004c8:     0x00    0x2f    0x06    0x08    0x00    0x30    0x07    0x09
- * 0x200004d0:     0x00    0x01    0x00    0x7f    0x02    0x00    0x7f    0x03
- * 0x200004d8:     0x00    0x7f    0x04    0x00    0x7f    0x05    0x00    0x7f
- * 0x200004e0:     0x06    0x00    0x7f    0x07    0x00    0x7f    0x08    0x00
- * 0x200004e8:     0x7f
- *
- * 0x00		: Midi Channel (Convention: 0x0 = 1)
- * 0x01 - 0x20	: For each pad
- * 			0x00: Note Number
- * 			0x01: PC Number
- * 			0x02: CC Number
- * 			0x03: Momentary/Toggle (0x0 = Momentary, 0x1 = Toggle)
- * 0x21 - 0x39 : For each knob
- * 			0x00: CC Value
- * 			0x01: Min. Value
- * 			0x02: Max. Value
- *
+ * Progress: ALMOST DONE / AWAITING MORE INFO
+ * TODO: Confirm purpose of ready flag
+ * 	 Understand addition of 1 to range
  */
-void FUN_08003b10(void)
+void eval_knobs(void)
 {
-	uint8_t *systick_decr_0 = UINT8_SYSTICK_DECREMENTER_0_20000018;
-	unknown *unknown_0 = UNKNOWN_20000040;
+	const uint8_t systick_decr_0 = *(uint8_t *)UINT8_SYSTICK_DECREMENTER_0_20000018;
+	unknown *ready = UNKNOWN_20000040;
 
-	// Appears to be reset after intervals of 4 calls
-	// Probably SysTick related
-	if (*unknown_0 != 1)
+	/*
+	 * Appears to be reset after intervals of 4 calls
+	 * Probably SysTick related
+	 */
+	if (*ready != 1)
 		return;
 
-	*unknown_0 = 0;
+	*ready = 0;
 
 	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_20000042;
 	program_settings *all_prog_settings = PROGRAM_SETTINGS_5_200003CC;
 	program_settings *sel_prog_settings = &all_prog_settings[sel_prog];
-	midi_data_t *prev_knob_vals = UINT8_8_PREV_KNOB_MIDI_VALS_20000029;
-	adc_val_t *knob_adc_vals = UINT16_8_KNOB_ADC_VALS_2000059A;
+	bool *scaled_knob_vals_changed = BOOL_8_SCALED_KNOB_VALS_CHANGED_20000019;
+	midi_data_t *prev_scaled_knob_vals = UINT8_8_PREV_SCALED_KNOB_VALS_20000021;
+	midi_data_t *prev_prev_scaled_knob_vals = UINT8_8_PREV_PREV_SCALED_KNOB_VALS_20000029;
 	adc_val_t *prev_accepted_knob_adc_vals = UINT16_8_PREV_ACCEPTED_KNOB_ADC_VALS_200004EA;
+	adc_val_t *knob_adc_vals = UINT16_8_KNOB_ADC_VALS_2000059A;
 
 	// Treat invalid MIDI channels as channel 0 (aka. 1)
 	if (sel_prog_settings->midi_ch > MIDI_MAX_CHANNEL)
 		sel_prog_settings->midi_ch = 0;
 
 	for (uint8_t i = 0; i < N_PADS_OR_KNOBS; i++) {
-		uint8_t *unknown_15 = sel_prog_settings + (i * sizeof(pad_settings));
-
 		uint8_t knob_cc = sel_prog_settings->knobs[i].cc;
-		uint8_t knob_max = sel_prog_settings->knobs[i].max;
-		uint8_t knob_min = sel_prog_settings->knobs[i].min;
-
-		uint8_t *unknown_16 = UINT8_8_UNKNOWN_20000019 + i;
-		midi_data_t *prev_knob_val = prev_knob_val[i];
+		uint8_t knob_rightmost = sel_prog_settings->knobs[i].rightmost;
+		uint8_t knob_leftmost = sel_prog_settings->knobs[i].leftmost;
+		bool *scaled_knob_val_changed = &scaled_knob_vals_changed[i];
+		midi_data_t *prev_knob_scaled_val = &prev_scaled_knob_vals[i];
+		midi_data_t *prev_prev_knob_scaled_val = &prev_prev_scaled_knob_vals[i];
 		adc_val_t *prev_accepted_knob_adc_val = &prev_accepted_knob_adc_vals[i];
 		adc_val_t *knob_adc_val = &knob_adc_vals[i];
 
@@ -630,63 +583,113 @@ void FUN_08003b10(void)
 		    ))
 			continue;
 
-		if (knob_min < knob_max) {
-			uint8_t d_min_max_plus_1 = (knob_max - knob_min) + 1;
-			knob_min += (_knob_adc_val * d_min_max_plus_1) / 0x3f7;
+		/* Scale ADC value to range specified by knob_leftmost and knob_rightmost
+		 * Scaling is done with the following formula:
+		 * scaled = b +/- (p * r) = knob_leftmost + ((knob_ad_val/0x3f7) * (knob_rightmost - knob_leftmost + 1))
+		 * Where:
+		 * 	- b is the lower/upper bound of the range, here: knob_leftmost
+		 * 	- An addition is performed in the leftmost knob value is smaller than the rightmost
+		 * 	  knob value, otherwise a subtraction is performed (knob operates "inverted")
+		 *      - r is the range, calculated by the difference between the minimum and maximum
+		 * 	  configured knob values, with 1 added to the result, here: (knob_rightmost - knob_leftmost) + 1
+		 * 	- p is the percentage of the range added/subtracted to the lower/upper bound. The percentage
+		 * 	  is calculated by dividing the knob ADC value by 0x3f7, which is the nearly the maximum value
+		 * 	  of the ADC (0x3ff).
+		 *
+		 * To avoid the need for floating point arithmetic, p has been split up:
+		 * 		scaled = b +/r (p * r) = l + (adc_val * r) / 0x3f7
+		 * The product of adc_var * r is likely to be large, allowing better precision
+		 * when dividing by 0x3f7 without the need for floating point arithmetic.
+		 *
+		 * I suspect the division by 0x3F7 is to ensure that 100% can always be reached
+		 * even if the change threshold (7) doesn't allow for 0x3FF to be reached.
+		 * As an example:
+		 * 	Assume the previous accepted ADC value is 0x3F2 and the current
+		 * 	ADC value is 0x3F9. In this case, no higher ADC values can be reached
+		 * 	anymore. as the change threshold is 7 (0x3FF - 0x3F9 < 7). However, since
+		 * 	the division is done by 0x3F7, the result will be floored to 1 (100%),
+		 * 	still allowing the full range to be used.
+		 * Theoretically 0x3F8 (0x3FF - 7 = 0x3F8) could be used as divisor, since the threshold
+		 * is exceeded when a difference of greater EQUAL 7 is reached. Correct me if I'm wrong.
+		 *
+		 * As for the addition of 1 to the range, I'm still rather uncertain why this is done.
+		 */
 
-			if (knob_max < knob_min)
-				knob_min = knob_max;
+		uint8_t scaled;
+
+		if (knob_leftmost < knob_rightmost) {
+			uint8_t range = (knob_rightmost - knob_leftmost) + 1;
+			scaled = knob_leftmost +
+			         (_knob_adc_val * range) /
+			         (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
+
+			if (knob_rightmost < scaled)
+				scaled = knob_rightmost;
 		} else {
-			uint8_t d_min_max_plus_1 = (knob_max - knob_min) + 1;
-			knob_min -= ((_knob_adc_val * d_min_max_plus_1) / 0x3f7);
+			uint8_t range = (knob_rightmost - knob_leftmost) + 1;
+			scaled = knob_leftmost -
+			         (_knob_adc_val * range) /
+			         (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
 
-			if (knob_max > knob_min)
-				knob_min = knob_max;
+			if (knob_rightmost > knob_leftmost)
+				scaled = knob_rightmost;
 		}
 
-		if (knob_min > 0x7f)
-			knob_min = 0x7f;
+		if (scaled > MIDI_MAX_DATA_VAL)
+			scaled = MIDI_MAX_DATA_VAL;
 
-		uint32_t unknown_6 = UNKNOWN_0x20000021;
-		uint8_t unknown_13 = *unknown_15;
+		if (*prev_knob_scaled_val != scaled) {
 
-		if (unknown_13 != knob_min) {
+			/*
+			 * Filter "spikes", ie. very short changes in values
+			 * that are immediately reverted. Such spikes could
+			 * likely be the result of ADC noise, etc.
+			 *
+			 * The criteria for a change the be discarded is the following:
+			 * 	- The previous scaled value is different from the current scaled value
+			 * 	- The scaled value two iterations ago is equal to the current scaled value
+			 * 	- The magnitude of the spike/change in ADC value is less than 15 (0x0F).
+			 * 	  This can be interpreted as a sort of "noise gate".
+			 */
+			if (*prev_prev_knob_scaled_val == scaled &&
+			    *scaled_knob_val_changed &&
+			    !EXCEEDS_THRESHOLD(
+			        _prev_accepted_knob_adc_val,
+			        _knob_adc_val,
+			        ADC_KNOB_NOISE_GATE
+			    ))
+				continue;
 
-			if (*prev_knob_val == knob_min) {
-
-				if (*unknown_16 != 0) {
-
-					if (_prev_accepted_knob_adc_val < _knob_adc_val + 0xf &&
-					    _knob_adc_val < _prev_accepted_knob_adc_val + 0xf) {
-						continue;
-					}
-
-					*unknown_16 = 0;
-				}
-
-				*unknown_16 = 1;
-			} else {
-				*unknown_16 = 0;
-			}
-
-			*prev_knob_val = unknown_13;
-			*unknown_15 = (uint8_t)knob_min;
-
-			if (*systick_decr_0 == 0) {
-
-				if (knob_cc > 0x7f)
-					knob_cc = 0x7f;
-
-				uint32_t data = CONCAT13((char)knob_min,CONCAT12(knob_cc,CONCAT11(midi_ch,0xb))) | 0xb000;
-				write_midi_buffer(&data,4);
-			}
+			*scaled_knob_val_changed = true;
+		} else {
+			*scaled_knob_val_changed = false;
 		}
 
-		*knob_adc_val = *prev_accepted_knob_adc_val; // TODO: Check if this is correct
+		*prev_prev_knob_scaled_val = *prev_knob_scaled_val;
+		*prev_knob_scaled_val = scaled;
+
+		/*
+		 * Send a MIDI CC message once the time is right.
+		 * The SysTick decrementer is likely employed to
+		 * prevent flooding the MIDI buffer.
+		 */
+		if (systick_decr_0 == 0) {
+
+			if (knob_cc > MIDI_MAX_DATA_VAL)
+				knob_cc = MIDI_MAX_DATA_VAL;
+
+			uint8_t data[4] = {
+				MIDI_CMD_CC_MSB | sel_prog_settings->midi_ch,
+				knob_cc, scaled,
+				0x00
+			};
+
+			write_midi_buffer(&data, sizeof(data));
+		}
+
+		*prev_accepted_knob_adc_val = *knob_adc_val;
 	}
-
 }
-
 
 /**
  * @ 0x08003d10
@@ -699,36 +702,37 @@ void read_mode_pbs(void)
 	uint16_t *prev_mode_pbs = UINT16_PREV_MODE_PB_IDR_BITS_20000044;
 	uint16_t *mode_pbs = UINT16_MODE_PB_IDR_BITS_CPY_20000048;
 
-	if (*systick_decr == 0) {
-		// Decremented by SysTick_Handler()
-		*systick_decr = MODE_PB_SYSTICK_SCAN_INTERVALS;
+	// Mode Push buttons are read every 4 SysTick intervals.
+	if (*systick_decr != 0)
+		return;
 
-		// Read mode push buttons. Negation due to PU's.
-		const uint32_t _mode_pbs = ~(PB_GPIO_PORT->IDR) & PB_IDR_MSK;
-		if (*prev_mode_pbs != _mode_pbs) {
-			*debounce = 0;
-			*prev_mode_pbs = _mode_pbs;
-			return;
-		}
+	*systick_decr = MODE_PB_SYSTICK_SCAN_INTERVALS;
 
-		/*
-		 * Debouncing/Bounce filtering?
-		 * The following code likely ensures stable mode push button states
-		 * by applying changes only if the buttons have maintained the same
-		 * state for at least MODE_PB_DEBOUNCE_THRESHOLD executions.
-		 *
-		 * I'm uncertain why the debounce counter reaches 240 even tough it's
-		 * only checked against MODE_PB_DEBOUNCE_THRESHOLD. A simpler approach
-		 * would be to count up to MODE_PB_DEBOUNCE_THRESHOLD directly and
-		 * cease incrementing when the threshold is reached.
-		 * The debounce counter is also not used anywhere else...
-		 * Perhaps this is some compiler bogus related to the data type of the
-		 * debounce counter? Not sure...
-		 */
-		if (*debounce < 240) {
-			if (++(*debounce) == MODE_PB_DEBOUNCE_THRESHOLD)
-				*mode_pbs = _mode_pbs;
-		}
+	// Read mode push buttons. Negation due to PU's.
+	const uint32_t _mode_pbs = ~(PB_GPIO_PORT->IDR) & PB_IDR_MSK;
+	if (*prev_mode_pbs != _mode_pbs) {
+		*debounce = 0;
+		*prev_mode_pbs = _mode_pbs;
+		return;
+	}
+
+	/*
+	 * Debouncing/Bounce filtering?
+	 * The following code likely ensures stable mode push button states
+	 * by applying changes only if the buttons have maintained the same
+	 * state for at least MODE_PB_DEBOUNCE_THRESHOLD executions.
+	 *
+	 * I'm uncertain why the debounce counter reaches 240 even tough it's
+	 * only checked against MODE_PB_DEBOUNCE_THRESHOLD. A simpler approach
+	 * would be to count up to MODE_PB_DEBOUNCE_THRESHOLD directly and
+	 * cease incrementing when the threshold is reached.
+	 * The debounce counter is also not used anywhere else...
+	 * Perhaps this is some compiler bogus related to the data type of the
+	 * debounce counter? Not sure...
+	 */
+	if (*debounce < 240) {
+		if (++(*debounce) == MODE_PB_DEBOUNCE_THRESHOLD)
+			*mode_pbs = _mode_pbs;
 	}
 }
 
@@ -1158,7 +1162,7 @@ void main_loop()
 			}
 
 			FUN_080023fc();
-			FUN_08003b10();
+			eval_knobs();
 			FUN_08003130();
 			read_mode_pbs();
 			eval_mode_pbs();
