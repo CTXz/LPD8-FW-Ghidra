@@ -1,0 +1,3 @@
+IDEL:/firmware.bin
+IADD:0000000a:/firmware.bin
+IDSET:/firmware.bin:7f0119f3310181758758905

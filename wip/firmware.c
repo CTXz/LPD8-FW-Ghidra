@@ -4,6 +4,8 @@
 #include <stm32f103xb.h>
 #include <stm32f1xx_hal.h>
 
+#define UNKNOWN_080056EC 0x080056EC
+
 #define UINT8_UNKNOWN_FLAG_20000000 0x20000000
 #define UINT8_MIDI_BUFFER_REMAINING_SPACE_20000004 0x20000004
 #define UINT8_PTR_PTR_MIDI_BUFFER_HEAD_20000008 0x20000008
@@ -20,7 +22,8 @@
 #define UINT8_SYSTICK_DECREMENTER_1_2000003c 0x2000003c // Decrements on every SysTick Interrupt
 #define UINT8_DEBOUNCE_COUNTER_2000003e 0x2000003e
 #define UINT8_SELECTED_MODE_2000003f 0x2000003f
-#define UNKNOWN_20000040 0x20000040
+#define UINT8_UNKNOWN_READY_20000040 0x20000040
+#define UINT8_UNKNOWN_READY_20000041 0x20000041
 #define UINT8_SELECTED_PROG_20000042 0x20000042
 #define UINT8_PREV_MODE_20000043 0x20000043
 #define UINT16_PREV_MODE_PB_IDR_BITS_20000044 0x20000044
@@ -31,6 +34,7 @@
 #define UINT8_MIDI_BUFFER_END_2000024C 0x2000024C
 #define PROGRAM_SETTINGS_5_200003CC 0x200003CC
 #define UINT16_8_PREV_ACCEPTED_KNOB_ADC_VALS_200004EA 0x200004EA
+#define UNKNOWN_200004FA 0x200004FA
 #define PAD_MIDI_8_0x2000052a 0x2000052a
 #define PAD_STATES_8_20000552 0x20000552
 #define UINT16_8_KNOB_ADC_VALS_2000059A 0x2000059A
@@ -59,10 +63,7 @@
 #define PB_PAD_GPIO 7
 #define PB_PROG_CHNG_GPIO 8
 #define PB_CC_GPIO 9
-#define PB_IDR_MSK (1 << PB_PROG_GPIO) \
-		 | (1 << PB_PAD_GPIO) \
-		 | (1 << PB_PROG_CHNG_GPIO) \
-		 | (1 << PB_CC_GPIO)
+#define PB_IDR_MSK (1 << PB_PROG_GPIO) | (1 << PB_PAD_GPIO) | (1 << PB_PROG_CHNG_GPIO) | (1 << PB_CC_GPIO)
 
 #define ADC_CR1_OFFSET 0x04
 #define ADC_CR2_OFFSET 0x08
@@ -96,7 +97,7 @@
 typedef uint32_t unknown; // So the linter doesn't complain
 
 typedef uint8_t midi_data_t; // Only 7 bits are used
-typedef uint16_t adc_val_t; // LPD8 configures ADC to 10-bit resolution
+typedef uint16_t adc_val_t;  // LPD8 configures ADC to 10-bit resolution
 
 typedef uint8_t pad_state_t;
 #define PAD_STATE_RELEASED 0
@@ -125,6 +126,10 @@ typedef uint32_t gpio_operation_t;
 typedef uint8_t push_setting_t;
 #define MOMENTARY 0x0
 #define TOGGLE 0x1
+
+typedef uint8_t ready_t;
+#define NOT_READY 0x0
+#define READY 0x1
 
 typedef struct {
 	uint32_t gpios;
@@ -321,23 +326,9 @@ void DMA_set_DIR_CIRC_PINC_MINC_PSIZE_MSIZE_PL_MEM2MEM_CNDTR_CPAR_CMAR(
 	uint32_t *dma_cpar = dma_cndtr + 0x4;
 	uint32_t *dma_cmar = dma_cpar + 0x4;
 
-	*dma_ccr &= ~(DMA_CCR_DIR
-	              | DMA_CCR_CIRC
-	              | DMA_CCR_PINC
-	              | DMA_CCR_MINC
-	              | DMA_CCR_PSIZE
-	              | DMA_CCR_MSIZE
-	              | DMA_CCR_PL
-	              | DMA_CCR_MEM2MEM);
+	*dma_ccr &= ~(DMA_CCR_DIR | DMA_CCR_CIRC | DMA_CCR_PINC | DMA_CCR_MINC | DMA_CCR_PSIZE | DMA_CCR_MSIZE | DMA_CCR_PL | DMA_CCR_MEM2MEM);
 
-	*dma_ccr |= dir_msk
-	            | circ_msk
-	            | pinc_msk
-	            | minc_msk
-	            | psize_msk
-	            | msize_msk
-	            | pl_msk
-	            | mem2mem_msk;
+	*dma_ccr |= dir_msk | circ_msk | pinc_msk | minc_msk | psize_msk | msize_msk | pl_msk | mem2mem_msk;
 
 	*dma_cndtr = cndtr;
 	*dma_cpar = cpar;
@@ -527,7 +518,6 @@ void write_midi_buffer(void *data, uint32_t size)
 		*remaining_space = last_element_addr - tail_addr;
 }
 
-
 /**
  * @ 0x08003b10
  * Progress: ALMOST DONE / AWAITING MORE INFO
@@ -537,17 +527,6 @@ void write_midi_buffer(void *data, uint32_t size)
 void eval_knobs(void)
 {
 	const uint8_t systick_decr_0 = *(uint8_t *)UINT8_SYSTICK_DECREMENTER_0_20000018;
-	unknown *ready = UNKNOWN_20000040;
-
-	/*
-	 * Appears to be reset after intervals of 4 calls
-	 * Probably SysTick related
-	 */
-	if (*ready != 1)
-		return;
-
-	*ready = 0;
-
 	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_20000042;
 	program_settings *all_prog_settings = PROGRAM_SETTINGS_5_200003CC;
 	program_settings *sel_prog_settings = &all_prog_settings[sel_prog];
@@ -556,12 +535,23 @@ void eval_knobs(void)
 	midi_data_t *prev_prev_scaled_knob_vals = UINT8_8_PREV_PREV_SCALED_KNOB_VALS_20000029;
 	adc_val_t *prev_accepted_knob_adc_vals = UINT16_8_PREV_ACCEPTED_KNOB_ADC_VALS_200004EA;
 	adc_val_t *knob_adc_vals = UINT16_8_KNOB_ADC_VALS_2000059A;
+	ready_t *ready = UINT8_UNKNOWN_READY_20000040;
+
+	/*
+	 * Appears to be reset after intervals of 4 calls
+	 * Probably SysTick related
+	 */
+	if (*ready != READY)
+		return;
+
+	*ready = NOT_READY;
 
 	// Treat invalid MIDI channels as channel 0 (aka. 1)
-	if (sel_prog_settings->midi_ch > MIDI_MAX_CHANNEL)
-		sel_prog_settings->midi_ch = 0;
+	uint8_t midi_ch = sel_prog_settings->midi_ch;
+	if (midi_ch > MIDI_MAX_CHANNEL)
+		midi_ch = 0;
 
-	for (uint8_t i = 0; i < N_PADS_OR_KNOBS; i++) {
+	for (uint8_t i = 0; i < N_KNOBS; i++) {
 		uint8_t knob_cc = sel_prog_settings->knobs[i].cc;
 		uint8_t knob_rightmost = sel_prog_settings->knobs[i].rightmost;
 		uint8_t knob_leftmost = sel_prog_settings->knobs[i].leftmost;
@@ -571,8 +561,8 @@ void eval_knobs(void)
 		adc_val_t *prev_accepted_knob_adc_val = &prev_accepted_knob_adc_vals[i];
 		adc_val_t *knob_adc_val = &knob_adc_vals[i];
 
-		const uint32_t _prev_accepted_knob_adc_val = (uint32_t) *prev_accepted_knob_adc_val;
-		const uint32_t _knob_adc_val = (uint32_t) *knob_adc_val;
+		const uint32_t _prev_accepted_knob_adc_val = (uint32_t)*prev_accepted_knob_adc_val;
+		const uint32_t _knob_adc_val = (uint32_t)*knob_adc_val;
 
 		// Knobs with CC 0 are ignored/disabled
 		if (knob_cc == 0)
@@ -582,8 +572,7 @@ void eval_knobs(void)
 		if (!EXCEEDS_THRESHOLD(
 		        _knob_adc_val,
 		        _prev_accepted_knob_adc_val,
-		        ADC_KNOB_CHANGE_THRESHOLD
-		    ))
+		        ADC_KNOB_CHANGE_THRESHOLD))
 			continue;
 
 		/* Scale ADC value to range specified by knob_leftmost and knob_rightmost
@@ -659,8 +648,7 @@ void eval_knobs(void)
 			    !EXCEEDS_THRESHOLD(
 			        _prev_accepted_knob_adc_val,
 			        _knob_adc_val,
-			        ADC_KNOB_NOISE_GATE
-			    ))
+			        ADC_KNOB_NOISE_GATE))
 				continue;
 
 			*scaled_knob_val_changed = true;
@@ -682,7 +670,7 @@ void eval_knobs(void)
 				knob_cc = MIDI_MAX_DATA_VAL;
 
 			uint8_t data[4] = {
-				MIDI_CMD_CC_MSB | sel_prog_settings->midi_ch,
+				MIDI_CMD_CC_MSB | midi_ch,
 				knob_cc, scaled,
 				0x00
 			};
@@ -693,6 +681,444 @@ void eval_knobs(void)
 		*prev_accepted_knob_adc_val = *knob_adc_val;
 	}
 }
+
+/**
+ * @ 0x08003130
+ * Progress: INCOMPLETE
+ */
+void FUN_08003130(void)
+{
+//   char *unknown_1;
+//   uint unknown_l_12;
+//   byte unknown_l_4;
+//   int iVar1;
+//   int unknown_l_7;
+//   uint in_r3;
+//   uint i;
+//   int unknown_l_2;
+//   byte unknown_l_3;
+//   undefined unknown_l_1;
+//   byte unknown_l_0;
+//   byte midi_ch;
+//   char cVar2;
+//   int sp_i4;
+//   bool unknown_l_6;
+//   undefined4 local_28;
+//   int pads_midi;
+//   ushort v2;
+
+//   unknown_l_0 = 0;
+//   unknown_l_1 = 0;
+//   unknown_l_2 = 0;
+//   unknown_l_3 = 0;
+//   if (*unknown_0_addr == 1) {
+//     *unknown_0_addr = '\0';
+//     pads_midi = pads_midi_addr;
+//     midi_ch = *(byte *)(all_prog_settings_addr + (uint)*sel_prog_addr * 0x39);
+//     if (0xf < midi_ch) {
+//       midi_ch = 0;
+//     }
+//     i = 0;
+//     local_28 = in_r3;
+//     do {
+//       unknown_l_4 = 2;
+//       sp_i4 = (uint)*sel_prog_addr * 0x39 + all_prog_settings_addr + i * 4;
+//       unknown_1 = (char *)(pads_midi_addr + -0x30 + i * 6);
+//       if (*unknown_1 == '\x01') {
+//         if (*(ushort *)(knob_adc_vals + (uint)*(byte *)(unknown_flash_addr + i) * 2) < 0x41) {
+//           if (unknown_1[2] == '\0') {
+//             *unknown_1 = '\0';
+//             unknown_l_4 = 0;
+//           }
+//           else {
+//             unknown_1[2] = unknown_1[2] + -1;
+//           }
+//           *(undefined2 *)(unknown_1 + 4) = 0;
+//           unknown_1[1] = '\0';
+//         }
+//         else {
+//           unknown_1[2] = '\x1e';
+//         }
+//       }
+//       else if (*unknown_1 == '\0') {
+//         v2 = *(ushort *)(knob_adc_vals + (uint)*(byte *)(unknown_flash_addr + i) * 2);
+//         if (0x80 < v2) {
+//           if (unknown_1[1] == '\0') {
+//             *(ushort *)(unknown_1 + 4) = v2;
+//           }
+//           else if (*(ushort *)(unknown_1 + 4) < v2) {
+//             *(ushort *)(unknown_1 + 4) = v2;
+//           }
+//           if ((byte)unknown_1[1] < 4) {
+//             unknown_1[1] = unknown_1[1] + 1;
+//           }
+//           else {
+//             unknown_l_4 = 1;
+//             *unknown_1 = '\x01';
+//             if (0x2a0 < *(ushort *)(unknown_1 + 4)) {
+//               *(undefined2 *)(unknown_1 + 4) = 0x2a0;
+//             }
+//             *(short *)(unknown_1 + 4) =
+//                  (short)(((*(ushort *)(unknown_1 + 4) - 0x80) * 0x7f) / 0x220);
+//           }
+//         }
+//       }
+//       else {
+//         *(undefined2 *)(unknown_1 + 4) = 0;
+//         unknown_1[1] = '\0';
+//         unknown_1[2] = '\x1e';
+//       }
+//       unknown_l_6 = unknown_l_4 == 2;
+//       do {
+//         if (unknown_l_6) goto LAB_080033f6;
+//         if (unknown_l_4 != 1) {
+//           if (unknown_l_4 == 0) {
+//             unknown_l_4 = *selected_mode_addr;
+//             if (unknown_l_4 == 3) {
+//                     /* pad_states.unknown0 = 0 */
+//               *(undefined *)(i * 5 + pads_midi_addr + 0x2a) = 0;
+//             }
+//             else if ((((unknown_l_4 != 2) && (unknown_l_4 != 1)) || (*(char *)(sp_i4 + 4) != '\x01')
+//                      ) && (sp_i4 = i * 5, *(char *)(pads_midi + sp_i4) == '\x01')) {
+//               *(undefined *)(pads_midi + sp_i4) = 0;
+//               if (*(byte *)(sp_i4 + pads_midi + 3) < 0x80) {
+//                 unknown_l_7 = sp_i4 + pads_midi_addr + 0x28;
+//                 *(undefined *)(unknown_l_7 + 2) = 0;
+//                 if (unknown_l_4 == 1) {
+//                   *(undefined *)(unknown_l_7 + 3) = 0;
+//                 }
+//                 else if (unknown_l_4 == 2) {
+//                   *(undefined *)(unknown_l_7 + 4) = 0;
+//                 }
+//                 write_midi_buffer(sp_i4 + pads_midi + 1,4);
+//               }
+//             }
+//           }
+//           goto LAB_080033f6;
+//         }
+//         if (*(ushort *)(unknown_1 + 4) < 0x80) {
+//           unknown_l_12 = (uint)(byte)*(ushort *)(unknown_1 + 4);
+//         }
+//         else {
+//           unknown_l_12 = 0x7f;
+//         }
+//         unknown_l_4 = *(byte *)(unknown_flash_addr + 8 + unknown_l_12);
+//         if (unknown_l_4 == 0) {
+//           unknown_l_4 = 1;
+//         }
+//         else if (0x7f < unknown_l_4) {
+//           unknown_l_4 = 0x7f;
+//         }
+//         unknown_1 = (char *)(uint)*selected_mode_addr;
+//         if (unknown_1 == (char *)0x1) {
+//           unknown_l_1 = 0x7f;
+//           unknown_l_3 = *(byte *)(sp_i4 + 1);
+//           unknown_l_2 = 9;
+//           unknown_l_0 = unknown_l_4;
+//         }
+//         else if (unknown_1 == (char *)0x2) {
+//           unknown_l_1 = 0;
+//           unknown_l_3 = *(byte *)(sp_i4 + 3);
+//           unknown_l_2 = 0xb;
+//           unknown_l_0 = unknown_l_4;
+//         }
+//         else if (unknown_1 == (char *)0x3) {
+//           unknown_l_0 = 0;
+//           unknown_l_1 = 0;
+//           unknown_l_3 = *(byte *)(sp_i4 + 2);
+//           unknown_l_2 = 0xc;
+//         }
+//         unknown_l_6 = unknown_1 == (char *)0x0;
+//       } while (unknown_l_6);
+//       local_28._0_3_ =
+//            CONCAT12(unknown_l_3,CONCAT11(midi_ch | (byte)(unknown_l_2 << 4),(char)unknown_l_2));
+//       local_28 = CONCAT13(unknown_l_0,(uint3)local_28);
+//       unknown_l_7 = i * 5;
+//       iVar1 = pads_midi_addr + 0x28 + unknown_l_7;
+//       *(undefined *)(iVar1 + 2) = 1;
+//       if (unknown_1 == (char *)0x1) {
+//         *(undefined *)(iVar1 + 3) = 1;
+//       }
+//       else if (unknown_1 == (char *)0x2) {
+//         *(undefined *)(iVar1 + 4) = 1;
+//       }
+//       if (((unknown_1 == (char *)0x2) || (unknown_1 == (char *)0x1)) &&
+//          (*(char *)(sp_i4 + 4) == '\x01')) {
+//         if (unknown_1 == (char *)0x1) {
+//           sp_i4 = pads_midi_addr + 0x28;
+//           *(bool *)(sp_i4 + unknown_l_7) = *(char *)(pads_midi_addr + 0x28 + unknown_l_7) == '\0';
+//           cVar2 = *(char *)(sp_i4 + unknown_l_7);
+//           if (cVar2 == '\0') {
+//             local_28 = CONCAT13(unknown_l_1,CONCAT12(unknown_l_3,CONCAT11(midi_ch,8))) | 0x8000;
+//           }
+//         }
+//         else {
+//           *(bool *)(iVar1 + 1) = *(char *)(iVar1 + 1) == '\0';
+//           cVar2 = *(char *)(iVar1 + 1);
+//           if (cVar2 == '\0') {
+//             local_28 = (uint)(uint3)local_28;
+//           }
+//         }
+//         if (cVar2 == '\0') {
+//           *(undefined *)(iVar1 + 2) = 0;
+//           if (unknown_1 == (char *)0x1) {
+//             *(undefined *)(iVar1 + 3) = 0;
+//           }
+//           else if (unknown_1 == (char *)0x2) {
+//             *(undefined *)(iVar1 + 4) = 0;
+//           }
+//         }
+//       }
+//       if (unknown_l_2 == 9) {
+//         *(undefined *)(unknown_l_7 + pads_midi + 1) = 8;
+//         *(byte *)(unknown_l_7 + pads_midi + 2) = midi_ch | 0x80;
+//       }
+//       else {
+//         *(char *)(unknown_l_7 + pads_midi + 1) = (char)unknown_l_2;
+//         *(undefined *)(unknown_l_7 + pads_midi + 2) = local_28._1_1_;
+//       }
+//       *(byte *)(unknown_l_7 + pads_midi + 3) = unknown_l_3;
+//       *(undefined *)(unknown_l_7 + pads_midi + 4) = unknown_l_1;
+//       *(undefined *)(pads_midi + unknown_l_7) = 1;
+//       if (unknown_l_3 < 0x80) {
+//         write_midi_buffer(&local_28,4);
+//       }
+// LAB_080033f6:
+//       i = i + 1 & 0xff;
+//     } while (i < 8);
+//   }
+//   return;
+// }
+
+
+
+	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_20000042;
+
+	uint8_t unknown_l_4;
+	unknown unknown_l_5;
+	uint32_t *unknown_1;
+	uint32_t *unknown_l_7;
+	uint8_t unknown_l_17;
+
+	uint8_t unknown_l_0 = 0;
+	uint8_t unknown_l_1 = 0;
+	uint32_t unknown_l_2 = 0;
+	uint8_t unknown_l_3 = 0;
+
+	uint8_t *ready = UINT8_UNKNOWN_READY_20000041;
+	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;
+	uint8_t *all_prog_settings = PROGRAM_SETTINGS_5_200003CC;
+	program_settings *sel_prog_settings = &all_prog_settings[sel_prog];
+	pad_states *pads_states = PAD_STATES_8_20000552;
+
+	if (*ready != READY)
+		return;
+
+	*ready = NOT_READY;
+
+	// Treat invalid MIDI channels as channel 0 (aka. 1)
+	uint8_t midi_ch = sel_prog_settings->midi_ch;
+	if (midi_ch > MIDI_MAX_CHANNEL)
+		midi_ch = 0;
+
+	// unknown_l_5 = in_r3;
+	for (uint8_t i = 0; i < N_PADS; i++) {
+		unknown_l_4 = 2;
+		uint8_t *unknown_1 = UNKNOWN_200004FA + i * 6;
+		uint8_t sp_i4 = *(uint8_t *)(&all_prog_settings[sel_prog] + i * 4);
+
+		if (*unknown_1 == 1) {
+			unknown *p1 = UINT16_8_KNOB_ADC_VALS_2000059A;
+			uint32_t v1 = *(uint8_t *)(UNKNOWN_080056EC + i) * 2; // Flash??
+			uint16_t v2 = *(uint16_t *)(p1 + v1);
+			if (v2 < 0x41) {
+				if (unknown_1[2] == 0) {
+					*unknown_1 = 0;
+					unknown_l_4 = 0;
+				} else {
+					unknown_1[2] -= 1;
+				}
+				unknown_1[4] = 0;
+				unknown_1[1] = 0;
+			} else {
+				unknown_1[2] = 0x1e;
+			}
+		} else if (*unknown_1 == 0) {
+			unknown *p1 = UINT16_8_KNOB_ADC_VALS_2000059A;
+			uint32_t v1 = *(uint8_t *)(UNKNOWN_080056EC + i) * 2; // Flash??
+			uint16_t v2 = *(uint16_t *)(p1 + v1);
+			if (v2 > 0x80) {
+				if (unknown_1[1] == 0) {
+					unknown_1[4] = v2;
+				} else if (unknown_1[4] < v2) {
+					unknown_1[4] = v2;
+				}
+				if ((uint8_t)unknown_1[1] < 4) {
+					unknown_1[1] += 1;
+				} else {
+					unknown_l_4 = 1;
+					*unknown_1 = 1;
+					if (unknown_1[4] > 0x2a0) {
+						unknown_1[4] = 0x2a0;
+					}
+					unknown_1[4] = ((unknown_1[4] - 0x80) * 0x7f) / 0x220;
+				}
+			}
+		} else {
+			unknown_1[4] = 0;
+			unknown_1[1] = 0;
+			unknown_1[2] = 0x1e;
+		}
+
+		bool unknown_l_6 = (unknown_l_4 == 2);
+		do {
+			if (unknown_l_6)
+				goto LAB_080033f6;
+
+			if (unknown_l_4 != 1) {
+				if (unknown_l_4 == 0) {
+					unknown_l_4 = UINT8_SELECTED_MODE_2000003f;
+
+					if (unknown_l_4 == 3) {
+						pads_states[i].unknown0 = 0;
+					} else if (
+					    (
+					        (unknown_l_4 != 2 &&
+					         unknown_l_4 != 1)
+					        ||
+					        (*(uint8_t *)(sp_i4 + 4) != 1)
+					    )
+					    &&
+					    (sp_i4 = i * 5, *(uint8_t *)(pads_midi + sp_i4) == 1)
+					) {
+						*(uint8_t *)(pads_midi + sp_i4) = 0;
+						if (*(uint8_t *)(sp_i4 + 3) < 0x80) {
+							unknown_l_7 = sp_i4 + &pads_midi + 0x28;
+							uint8_t *unknown_l_8 = *(uint8_t *)(unknown_l_7 + 2);
+							uint8_t *unknown_l_9 = *(uint8_t *)(unknown_l_7 + 3);
+							uint8_t *unknown_l_10 = *(uint8_t *)(unknown_l_7 + 4);
+							*unknown_l_8 = 0;
+							if (unknown_l_4 == 1) {
+								*unknown_l_9 = 0;
+							} else if (unknown_l_4 == 2) {
+								*unknown_l_10 = 0;
+							}
+							write_midi_buffer(sp_i4 + &pads_midi + 1, 4);
+						}
+					}
+				}
+			}
+			goto LAB_080033f6;
+
+			uint8_t *unknown_l_11 = unknown_1 + 4;
+			uint32_t unknown_l_12;
+
+			if (*unknown_l_11 < 0x80) {
+				unknown_l_12 = *unknown_l_11;
+			} else {
+				unknown_l_12 = 0x7f;
+			}
+
+			unknown_l_4 = *(uint8_t *)(UNKNOWN_080056EC + 8 + unknown_l_12);
+			if (unknown_l_4 == 0) {
+				unknown_l_4 = 1;
+			} else if (0x7f < unknown_l_4) {
+				unknown_l_4 = 0x7f;
+			}
+
+			unknown_1 = UINT8_SELECTED_MODE_2000003f;
+
+			if (unknown_1 == 1) {
+				unknown_l_1 = 0x7f;
+				unknown_l_3 = *(uint8_t *)(sp_i4 + 1);
+				unknown_l_2 = 9;
+				unknown_l_0 = unknown_l_4;
+			} else if (unknown_1 == 2) {
+				unknown_l_1 = 0;
+				unknown_l_3 = *(uint8_t *)(sp_i4 + 3);
+				unknown_l_2 = 0xb;
+				unknown_l_0 = unknown_l_4;
+			} else if (unknown_1 == 3) {
+				unknown_l_0 = 0;
+				unknown_l_1 = 0;
+				unknown_l_3 = *(uint8_t *)(sp_i4 + 2);
+				unknown_l_2 = 0xc;
+			}
+			unknown_l_6 = unknown_1 == 0;
+		} while (unknown_l_6);
+
+		// unknown_l_5 = CONCAT12(unknown_l_3,CONCAT11(midi_ch | (byte)(unknown_l_2 << 4),(char)unknown_l_2));
+		// unknown_l_5 = CONCAT13(unknown_l_0, (uint3)unknown_l_5);
+
+		uint32_t i5 = i * 5;
+		uint32_t *unknown_l_13 = pads_midi + 0x28 + i5;
+
+		uint8_t *unknown_l_14 = unknown_l_13 + 2;
+		uint8_t *unknown_l_15 = unknown_l_13 + 3;
+		uint8_t *unknown_l_16 = unknown_l_13 + 4;
+
+		*unknown_l_14 = 1;
+
+		if (unknown_1 == 1) {
+			*unknown_l_15 = 1;
+		} else if (unknown_1 == 2) {
+			*unknown_l_16 = 1;
+		}
+
+		if (((unknown_1 == 2) || (unknown_1 == 1)) &&
+		    (*(uint8_t *)(sp_i4 + 4) == 1)) {
+			if (unknown_1 == (char *)0x1) {
+				sp_i4 = &pads_midi + 0x28;
+				bool *b1 = sp_i4 + i5;
+				uint8_t v1 = *(uint8_t *)(pads_midi + 0x28 + i5);
+				*b1 = v1 == 0;
+				unknown_l_17 = *(uint8_t *)(sp_i4 + i5);
+				if (unknown_l_17 == 0) {
+					// local_28 = CONCAT13(unknown_l_1,CONCAT12(unknown_l_3,CONCAT11(midi_ch,8))) | 0x8000;
+				}
+			}
+		} else {
+			bool *b1 = unknown_l_13 + 1;
+			uint8_t v1 = *(uint8_t *)(unknown_l_13 + 1);
+			*b1 = v1 == 0;
+			unknown_l_17 = *(uint8_t *)(unknown_l_13 + 1);
+			if (unknown_l_17 == 0) {
+				// local_28 = (uint)(uint3)local_28;
+			}
+		}
+
+		if (unknown_l_17 == 0) {
+			uint8_t *p1 = unknown_l_13 + 2;
+			uint8_t *p2 = unknown_l_13 + 3;
+			uint8_t *p3 = unknown_l_13 + 4;
+
+			*p1 = 0;
+			if (unknown_1 == 1) {
+				*p2 = 0;
+			} else if (unknown_1 == 2) {
+				*p3 = 0;
+			}
+		}
+
+		if (unknown_l_2 == 9) {
+			*(uint8_t *)(i5 + &pads_midi + 1) = 8;
+			*(uint8_t *)(i5 + &pads_midi + 2) = midi_ch | 0x80;
+		} else {
+			*(uint8_t *)(i5 + &pads_midi + 1) = (uint8_t)unknown_l_2;
+			// *(uint8_t *)(i5 + &pads_midi + 2) = unknown_l_5._1_1_;
+		}
+
+		*(uint8_t *)(i5 + &pads_midi + 3) = unknown_l_3;
+		*(uint8_t *)(i5 + &pads_midi + 4) = unknown_l_1;
+		*(uint8_t *)(&pads_midi + i5) = 1;
+
+		if (unknown_l_3 < 0x80) {
+			// write_midi_buffer(&local_28,4);
+		}
+LAB_080033f6:
+	}
+}
+
 
 /**
  * @ 0x08003d10
