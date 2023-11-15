@@ -4,40 +4,42 @@
 #include <stm32f103xb.h>
 #include <stm32f1xx_hal.h>
 
-#define UNKNOWN_080056EC 0x080056EC
+#define CONST_UINT8_8_LUT_8TO15_080056EC 0x080056EC // = [8, 9, 10, 11, 12, 13, 14, 15]
+#define CONST_UINT8_127_LUT_1TO127_080056E4 0x080056E4 // = [1, 2, ... 126, 127, 127]
 
-#define UINT8_UNKNOWN_FLAG_20000000 0x20000000
-#define UINT8_MIDI_BUFFER_REMAINING_SPACE_20000004 0x20000004
-#define UINT8_PTR_PTR_MIDI_BUFFER_HEAD_20000008 0x20000008
-#define UINT8_PTR_PTR_MIDI_BUFFER_TAIL_2000000c 0x2000000c // buffer_end - MIDI_BUFFER_SIZE
-#define UINT8_UNKNOWN_FLAG_20000011 0x20000011
-#define UNKNOWN_ENUM_20000012 0x20000012
-#define UINT8_SYSTICK_DECREMENTER_0_20000018 0x20000018 // Decrements on every SysTick Interrupt
-#define BOOL_8_SCALED_KNOB_VALS_CHANGED_20000019 0x20000019
-#define UINT8_8_PREV_SCALED_KNOB_VALS_20000021 0x20000021
-#define UINT8_8_PREV_PREV_SCALED_KNOB_VALS_20000029 0x20000029
+#define UINT8_UNKNOWN_FLAG_0x20000000 0x20000000
+#define UINT8_MIDI_BUFFER_REMAINING_SPACE_0x20000004 0x20000004
+#define UINT8_PTR_PTR_MIDI_BUFFER_HEAD_0x20000008 0x20000008
+#define UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c 0x2000000c // buffer_end - MIDI_BUFFER_SIZE
+#define UINT8_UNKNOWN_FLAG_0x20000011 0x20000011
+#define UNKNOWN_ENUM_0x20000012 0x20000012
+#define UINT8_SYSTICK_DECREMENTER_0_0x20000018 0x20000018 // Decrements on every SysTick Interrupt
+#define BOOL_8_SCALED_KNOB_VALS_CHANGED_0x20000019 0x20000019
+#define UINT8_8_PREV_SCALED_KNOB_VALS_0x20000021 0x20000021
+#define UINT8_8_PREV_PREV_SCALED_KNOB_VALS_0x20000029 0x20000029
 #define UINT8_PREV_MODE_0x20000031 0x20000031
-#define UINT8_PREV_SELECTED_PROG_20000032 0x20000032
-#define UINT8_8_PREV_PADS_STATE_20000033 0x20000033
-#define UINT8_SYSTICK_DECREMENTER_1_2000003c 0x2000003c // Decrements on every SysTick Interrupt
-#define UINT8_DEBOUNCE_COUNTER_2000003e 0x2000003e
-#define UINT8_SELECTED_MODE_2000003f 0x2000003f
-#define UINT8_UNKNOWN_READY_20000040 0x20000040
-#define UINT8_UNKNOWN_READY_20000041 0x20000041
-#define UINT8_SELECTED_PROG_20000042 0x20000042
-#define UINT8_PREV_MODE_20000043 0x20000043
-#define UINT16_PREV_MODE_PB_IDR_BITS_20000044 0x20000044
-#define UINT16_PREV_MODE_PB_IDR_BITS_20000046 0x20000046
-#define UINT16_MODE_PB_IDR_BITS_CPY_20000048 0x20000048
-#define UINT8_UNKNOWN_FLAG_20000098 0x20000098
-#define UINT8_PTR_MIDI_BUFFER_TAIL_2000015c 0x2000015c
-#define UINT8_MIDI_BUFFER_END_2000024C 0x2000024C
-#define PROGRAM_SETTINGS_5_200003CC 0x200003CC
-#define UINT16_8_PREV_ACCEPTED_KNOB_ADC_VALS_200004EA 0x200004EA
-#define UNKNOWN_200004FA 0x200004FA
+#define UINT8_PREV_SELECTED_PROG_0x20000032 0x20000032
+#define UINT8_8_PREV_PADS_STATE_0x20000033 0x20000033
+#define UINT8_SYSTICK_DECREMENTER_1_0x2000003c 0x2000003c // Decrements on every SysTick Interrupt
+#define UINT8_DEBOUNCE_COUNTER_0x2000003e 0x2000003e
+#define UINT8_SELECTED_MODE_0x2000003f 0x2000003f
+#define UINT8_UNKNOWN_READY_0x20000040 0x20000040
+#define UINT8_UNKNOWN_READY_0x20000041 0x20000041
+#define UINT8_SELECTED_PROG_0x20000042 0x20000042
+#define UINT8_PREV_MODE_0x20000043 0x20000043
+#define UINT16_PREV_MODE_PB_IDR_BITS_0x20000044 0x20000044
+#define UINT16_PREV_MODE_PB_IDR_BITS_0x20000046 0x20000046
+#define UINT16_MODE_PB_IDR_BITS_CPY_0x20000048 0x20000048
+#define UINT8_UNKNOWN_FLAG_0x20000098 0x20000098
+#define UINT8_PTR_MIDI_BUFFER_TAIL_0x2000015c 0x2000015c
+#define UINT8_MIDI_BUFFER_END_0x2000024C 0x2000024C
+#define PROGRAM_SETTINGS_5_0x200003CC 0x200003CC
+#define UINT16_8_PREV_ACCEPTED_KNOB_ADC_VALS_0x200004EA 0x200004EA
+#define PAD_HANDLING_DATA_8_0x200004FA 0x200004FA
 #define PAD_MIDI_8_0x2000052a 0x2000052a
-#define PAD_STATES_8_20000552 0x20000552
-#define UINT16_8_KNOB_ADC_VALS_2000059A 0x2000059A
+#define PAD_STATES_8_0x20000552 0x20000552
+#define UINT16_8_KNOB_ADC_VALS_0x2000059A 0x2000059A
+#define UINT16_8_PAD_ADC_VALS_0x200005AA 0x200005AA
 
 // TODO Examine data structure
 #define PROG_4_SELECT_FLAG 0x2000050c		    // uint8_t
@@ -131,6 +133,11 @@ typedef uint8_t ready_t;
 #define NOT_READY 0x0
 #define READY 0x1
 
+typedef uint8_t pad_active_t;
+#define INACTIVE 0x0
+#define ACTIVE 0x1
+#define ACTIVE_UNKNOWN 0x2
+
 typedef struct {
 	uint32_t gpios;
 	uint32_t other_cr_bits; // CNF + MODE, only used if op == GPIO_CFG_OP_OTHER
@@ -162,6 +169,14 @@ typedef struct {
 } pad_settings;
 
 typedef struct {
+	pad_active_t active;
+	uint8_t up_cntr;
+	uint8_t down_cntr;
+	uint8_t unknown0;
+	uint8_t max_rec_adc_val;
+} pad_handling_data;
+
+typedef struct {
 	uint8_t cc;
 	uint8_t leftmost;
 	uint8_t rightmost;
@@ -179,8 +194,8 @@ typedef struct {
  */
 void SysTick_Handler(void)
 {
-	uint8_t *systick_decr_0 = UINT8_SYSTICK_DECREMENTER_0_20000018;
-	uint8_t *systick_decr_1 = UINT8_SYSTICK_DECREMENTER_1_2000003c;
+	uint8_t *systick_decr_0 = UINT8_SYSTICK_DECREMENTER_0_0x20000018;
+	uint8_t *systick_decr_1 = UINT8_SYSTICK_DECREMENTER_1_0x2000003c;
 
 	if (*systick_decr_0 != 0)
 		*systick_decr_0 = *systick_decr_0 - 1;
@@ -483,10 +498,10 @@ void write_midi_buffer(void *data, uint32_t size)
 {
 	// TODO: Clarify which pointers are only used for their address
 
-	uint8_t *remaining_space = UINT8_MIDI_BUFFER_REMAINING_SPACE_20000004;
-	uint8_t *buffer_end = UINT8_MIDI_BUFFER_END_2000024C;
-	uint8_t **head = UINT8_PTR_PTR_MIDI_BUFFER_HEAD_20000008;
-	uint8_t **tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_2000000c; // buffer_end - MIDI_BUFFER_SIZE
+	uint8_t *remaining_space = UINT8_MIDI_BUFFER_REMAINING_SPACE_0x20000004;
+	uint8_t *buffer_end = UINT8_MIDI_BUFFER_END_0x2000024C;
+	uint8_t **head = UINT8_PTR_PTR_MIDI_BUFFER_HEAD_0x20000008;
+	uint8_t **tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c; // buffer_end - MIDI_BUFFER_SIZE
 
 	for (uint8_t i = 0; i < size; i++) {
 		uint8_t *next_element = *head + 1;
@@ -526,16 +541,16 @@ void write_midi_buffer(void *data, uint32_t size)
  */
 void eval_knobs(void)
 {
-	const uint8_t systick_decr_0 = *(uint8_t *)UINT8_SYSTICK_DECREMENTER_0_20000018;
-	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_20000042;
-	program_settings *all_prog_settings = PROGRAM_SETTINGS_5_200003CC;
+	const uint8_t systick_decr_0 = *(uint8_t *)UINT8_SYSTICK_DECREMENTER_0_0x20000018;
+	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_0x20000042;
+	program_settings *all_prog_settings = PROGRAM_SETTINGS_5_0x200003CC;
 	program_settings *sel_prog_settings = &all_prog_settings[sel_prog];
-	bool *scaled_knob_vals_changed = BOOL_8_SCALED_KNOB_VALS_CHANGED_20000019;
-	midi_data_t *prev_scaled_knob_vals = UINT8_8_PREV_SCALED_KNOB_VALS_20000021;
-	midi_data_t *prev_prev_scaled_knob_vals = UINT8_8_PREV_PREV_SCALED_KNOB_VALS_20000029;
-	adc_val_t *prev_accepted_knob_adc_vals = UINT16_8_PREV_ACCEPTED_KNOB_ADC_VALS_200004EA;
-	adc_val_t *knob_adc_vals = UINT16_8_KNOB_ADC_VALS_2000059A;
-	ready_t *ready = UINT8_UNKNOWN_READY_20000040;
+	bool *scaled_knob_vals_changed = BOOL_8_SCALED_KNOB_VALS_CHANGED_0x20000019;
+	midi_data_t *prev_scaled_knob_vals = UINT8_8_PREV_SCALED_KNOB_VALS_0x20000021;
+	midi_data_t *prev_prev_scaled_knob_vals = UINT8_8_PREV_PREV_SCALED_KNOB_VALS_0x20000029;
+	adc_val_t *prev_accepted_knob_adc_vals = UINT16_8_PREV_ACCEPTED_KNOB_ADC_VALS_0x200004EA;
+	adc_val_t *knob_adc_vals = UINT16_8_KNOB_ADC_VALS_0x2000059A;
+	ready_t *ready = UINT8_UNKNOWN_READY_0x20000040;
 
 	/*
 	 * Appears to be reset after intervals of 4 calls
@@ -688,228 +703,28 @@ void eval_knobs(void)
  */
 void FUN_08003130(void)
 {
-//   char *unknown_1;
-//   uint unknown_l_12;
-//   byte unknown_l_4;
-//   int iVar1;
-//   int unknown_l_7;
-//   uint in_r3;
-//   uint i;
-//   int unknown_l_2;
-//   byte unknown_l_3;
-//   undefined unknown_l_1;
-//   byte unknown_l_0;
-//   byte midi_ch;
-//   char cVar2;
-//   int sp_i4;
-//   bool unknown_l_6;
-//   undefined4 local_28;
-//   int pads_midi;
-//   ushort v2;
-
-//   unknown_l_0 = 0;
-//   unknown_l_1 = 0;
-//   unknown_l_2 = 0;
-//   unknown_l_3 = 0;
-//   if (*unknown_0_addr == 1) {
-//     *unknown_0_addr = '\0';
-//     pads_midi = pads_midi_addr;
-//     midi_ch = *(byte *)(all_prog_settings_addr + (uint)*sel_prog_addr * 0x39);
-//     if (0xf < midi_ch) {
-//       midi_ch = 0;
-//     }
-//     i = 0;
-//     local_28 = in_r3;
-//     do {
-//       unknown_l_4 = 2;
-//       sp_i4 = (uint)*sel_prog_addr * 0x39 + all_prog_settings_addr + i * 4;
-//       unknown_1 = (char *)(pads_midi_addr + -0x30 + i * 6);
-//       if (*unknown_1 == '\x01') {
-//         if (*(ushort *)(knob_adc_vals + (uint)*(byte *)(unknown_flash_addr + i) * 2) < 0x41) {
-//           if (unknown_1[2] == '\0') {
-//             *unknown_1 = '\0';
-//             unknown_l_4 = 0;
-//           }
-//           else {
-//             unknown_1[2] = unknown_1[2] + -1;
-//           }
-//           *(undefined2 *)(unknown_1 + 4) = 0;
-//           unknown_1[1] = '\0';
-//         }
-//         else {
-//           unknown_1[2] = '\x1e';
-//         }
-//       }
-//       else if (*unknown_1 == '\0') {
-//         v2 = *(ushort *)(knob_adc_vals + (uint)*(byte *)(unknown_flash_addr + i) * 2);
-//         if (0x80 < v2) {
-//           if (unknown_1[1] == '\0') {
-//             *(ushort *)(unknown_1 + 4) = v2;
-//           }
-//           else if (*(ushort *)(unknown_1 + 4) < v2) {
-//             *(ushort *)(unknown_1 + 4) = v2;
-//           }
-//           if ((byte)unknown_1[1] < 4) {
-//             unknown_1[1] = unknown_1[1] + 1;
-//           }
-//           else {
-//             unknown_l_4 = 1;
-//             *unknown_1 = '\x01';
-//             if (0x2a0 < *(ushort *)(unknown_1 + 4)) {
-//               *(undefined2 *)(unknown_1 + 4) = 0x2a0;
-//             }
-//             *(short *)(unknown_1 + 4) =
-//                  (short)(((*(ushort *)(unknown_1 + 4) - 0x80) * 0x7f) / 0x220);
-//           }
-//         }
-//       }
-//       else {
-//         *(undefined2 *)(unknown_1 + 4) = 0;
-//         unknown_1[1] = '\0';
-//         unknown_1[2] = '\x1e';
-//       }
-//       unknown_l_6 = unknown_l_4 == 2;
-//       do {
-//         if (unknown_l_6) goto LAB_080033f6;
-//         if (unknown_l_4 != 1) {
-//           if (unknown_l_4 == 0) {
-//             unknown_l_4 = *selected_mode_addr;
-//             if (unknown_l_4 == 3) {
-//                     /* pad_states.unknown0 = 0 */
-//               *(undefined *)(i * 5 + pads_midi_addr + 0x2a) = 0;
-//             }
-//             else if ((((unknown_l_4 != 2) && (unknown_l_4 != 1)) || (*(char *)(sp_i4 + 4) != '\x01')
-//                      ) && (sp_i4 = i * 5, *(char *)(pads_midi + sp_i4) == '\x01')) {
-//               *(undefined *)(pads_midi + sp_i4) = 0;
-//               if (*(byte *)(sp_i4 + pads_midi + 3) < 0x80) {
-//                 unknown_l_7 = sp_i4 + pads_midi_addr + 0x28;
-//                 *(undefined *)(unknown_l_7 + 2) = 0;
-//                 if (unknown_l_4 == 1) {
-//                   *(undefined *)(unknown_l_7 + 3) = 0;
-//                 }
-//                 else if (unknown_l_4 == 2) {
-//                   *(undefined *)(unknown_l_7 + 4) = 0;
-//                 }
-//                 write_midi_buffer(sp_i4 + pads_midi + 1,4);
-//               }
-//             }
-//           }
-//           goto LAB_080033f6;
-//         }
-//         if (*(ushort *)(unknown_1 + 4) < 0x80) {
-//           unknown_l_12 = (uint)(byte)*(ushort *)(unknown_1 + 4);
-//         }
-//         else {
-//           unknown_l_12 = 0x7f;
-//         }
-//         unknown_l_4 = *(byte *)(unknown_flash_addr + 8 + unknown_l_12);
-//         if (unknown_l_4 == 0) {
-//           unknown_l_4 = 1;
-//         }
-//         else if (0x7f < unknown_l_4) {
-//           unknown_l_4 = 0x7f;
-//         }
-//         unknown_1 = (char *)(uint)*selected_mode_addr;
-//         if (unknown_1 == (char *)0x1) {
-//           unknown_l_1 = 0x7f;
-//           unknown_l_3 = *(byte *)(sp_i4 + 1);
-//           unknown_l_2 = 9;
-//           unknown_l_0 = unknown_l_4;
-//         }
-//         else if (unknown_1 == (char *)0x2) {
-//           unknown_l_1 = 0;
-//           unknown_l_3 = *(byte *)(sp_i4 + 3);
-//           unknown_l_2 = 0xb;
-//           unknown_l_0 = unknown_l_4;
-//         }
-//         else if (unknown_1 == (char *)0x3) {
-//           unknown_l_0 = 0;
-//           unknown_l_1 = 0;
-//           unknown_l_3 = *(byte *)(sp_i4 + 2);
-//           unknown_l_2 = 0xc;
-//         }
-//         unknown_l_6 = unknown_1 == (char *)0x0;
-//       } while (unknown_l_6);
-//       local_28._0_3_ =
-//            CONCAT12(unknown_l_3,CONCAT11(midi_ch | (byte)(unknown_l_2 << 4),(char)unknown_l_2));
-//       local_28 = CONCAT13(unknown_l_0,(uint3)local_28);
-//       unknown_l_7 = i * 5;
-//       iVar1 = pads_midi_addr + 0x28 + unknown_l_7;
-//       *(undefined *)(iVar1 + 2) = 1;
-//       if (unknown_1 == (char *)0x1) {
-//         *(undefined *)(iVar1 + 3) = 1;
-//       }
-//       else if (unknown_1 == (char *)0x2) {
-//         *(undefined *)(iVar1 + 4) = 1;
-//       }
-//       if (((unknown_1 == (char *)0x2) || (unknown_1 == (char *)0x1)) &&
-//          (*(char *)(sp_i4 + 4) == '\x01')) {
-//         if (unknown_1 == (char *)0x1) {
-//           sp_i4 = pads_midi_addr + 0x28;
-//           *(bool *)(sp_i4 + unknown_l_7) = *(char *)(pads_midi_addr + 0x28 + unknown_l_7) == '\0';
-//           cVar2 = *(char *)(sp_i4 + unknown_l_7);
-//           if (cVar2 == '\0') {
-//             local_28 = CONCAT13(unknown_l_1,CONCAT12(unknown_l_3,CONCAT11(midi_ch,8))) | 0x8000;
-//           }
-//         }
-//         else {
-//           *(bool *)(iVar1 + 1) = *(char *)(iVar1 + 1) == '\0';
-//           cVar2 = *(char *)(iVar1 + 1);
-//           if (cVar2 == '\0') {
-//             local_28 = (uint)(uint3)local_28;
-//           }
-//         }
-//         if (cVar2 == '\0') {
-//           *(undefined *)(iVar1 + 2) = 0;
-//           if (unknown_1 == (char *)0x1) {
-//             *(undefined *)(iVar1 + 3) = 0;
-//           }
-//           else if (unknown_1 == (char *)0x2) {
-//             *(undefined *)(iVar1 + 4) = 0;
-//           }
-//         }
-//       }
-//       if (unknown_l_2 == 9) {
-//         *(undefined *)(unknown_l_7 + pads_midi + 1) = 8;
-//         *(byte *)(unknown_l_7 + pads_midi + 2) = midi_ch | 0x80;
-//       }
-//       else {
-//         *(char *)(unknown_l_7 + pads_midi + 1) = (char)unknown_l_2;
-//         *(undefined *)(unknown_l_7 + pads_midi + 2) = local_28._1_1_;
-//       }
-//       *(byte *)(unknown_l_7 + pads_midi + 3) = unknown_l_3;
-//       *(undefined *)(unknown_l_7 + pads_midi + 4) = unknown_l_1;
-//       *(undefined *)(pads_midi + unknown_l_7) = 1;
-//       if (unknown_l_3 < 0x80) {
-//         write_midi_buffer(&local_28,4);
-//       }
-// LAB_080033f6:
-//       i = i + 1 & 0xff;
-//     } while (i < 8);
-//   }
-//   return;
-// }
+	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_0x20000042;
+	const uint8_t *plus_1_max_127 = CONST_UINT8_127_LUT_1TO127_080056E4;
+	const mode_t sel_mode = *(uint8_t *)UINT8_SELECTED_MODE_0x2000003f;
 
 
-
-	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_20000042;
-
-	uint8_t unknown_l_4;
+	uint8_t active;
 	unknown unknown_l_5;
 	uint32_t *unknown_1;
-	uint32_t *unknown_l_7;
 	uint8_t unknown_l_17;
 
-	uint8_t unknown_l_0 = 0;
-	uint8_t unknown_l_1 = 0;
-	uint32_t unknown_l_2 = 0;
-	uint8_t unknown_l_3 = 0;
+	uint8_t data2 = 0;
+	uint8_t data2_off = 0;
+	uint32_t status_msb = 0;
+	uint8_t data1 = 0;
 
-	uint8_t *ready = UINT8_UNKNOWN_READY_20000041;
+	uint8_t *ready = UINT8_UNKNOWN_READY_0x20000041;
 	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;
-	uint8_t *all_prog_settings = PROGRAM_SETTINGS_5_200003CC;
+	uint8_t *all_prog_settings = PROGRAM_SETTINGS_5_0x200003CC;
 	program_settings *sel_prog_settings = &all_prog_settings[sel_prog];
-	pad_states *pads_states = PAD_STATES_8_20000552;
+	pad_states *pads_states = PAD_STATES_8_0x20000552;
+	pad_handling_data *pads_hd = PAD_HANDLING_DATA_8_0x200004FA;
+	adc_val_t *pad_adc_vals = UINT16_8_PAD_ADC_VALS_0x200005AA;
 
 	if (*ready != READY)
 		return;
@@ -923,132 +738,122 @@ void FUN_08003130(void)
 
 	// unknown_l_5 = in_r3;
 	for (uint8_t i = 0; i < N_PADS; i++) {
-		unknown_l_4 = 2;
-		uint8_t *unknown_1 = UNKNOWN_200004FA + i * 6;
-		uint8_t sp_i4 = *(uint8_t *)(&all_prog_settings[sel_prog] + i * 4);
 
-		if (*unknown_1 == 1) {
-			unknown *p1 = UINT16_8_KNOB_ADC_VALS_2000059A;
-			uint32_t v1 = *(uint8_t *)(UNKNOWN_080056EC + i) * 2; // Flash??
-			uint16_t v2 = *(uint16_t *)(p1 + v1);
-			if (v2 < 0x41) {
-				if (unknown_1[2] == 0) {
-					*unknown_1 = 0;
-					unknown_l_4 = 0;
+		active = ACTIVE_UNKNOWN;
+		pad_handling_data *pad_hd = &pads_hd[i];
+		uint8_t sp_i4 = *(uint8_t *)(sel_prog_settings + i * 4);
+		uint16_t pad_adc_val = pad_adc_vals[i];
+
+		if (pad_hd->active == ACTIVE) {
+
+			if (pad_adc_val <= 0x40) {
+
+				if (pad_hd->down_cntr == 0) {
+					pad_hd->active = INACTIVE;
+					active = INACTIVE;
 				} else {
-					unknown_1[2] -= 1;
+					pad_hd->down_cntr -= 1;
 				}
-				unknown_1[4] = 0;
-				unknown_1[1] = 0;
+
+				pad_hd->max_rec_adc_val = 0;
+				pad_hd->up_cntr = 0;
 			} else {
-				unknown_1[2] = 0x1e;
+				pad_hd->down_cntr = 0x1e;
 			}
-		} else if (*unknown_1 == 0) {
-			unknown *p1 = UINT16_8_KNOB_ADC_VALS_2000059A;
-			uint32_t v1 = *(uint8_t *)(UNKNOWN_080056EC + i) * 2; // Flash??
-			uint16_t v2 = *(uint16_t *)(p1 + v1);
-			if (v2 > 0x80) {
-				if (unknown_1[1] == 0) {
-					unknown_1[4] = v2;
-				} else if (unknown_1[4] < v2) {
-					unknown_1[4] = v2;
-				}
-				if ((uint8_t)unknown_1[1] < 4) {
-					unknown_1[1] += 1;
+
+		} else if (pad_hd->active == INACTIVE) {
+
+			if (pad_adc_val > 0x80) {
+
+				if (pad_hd->up_cntr == 0 ||
+				    pad_hd->max_rec_adc_val < pad_adc_val)
+					pad_hd->max_rec_adc_val = pad_adc_val;
+
+				if (pad_hd->up_cntr < 4) {
+					pad_hd->up_cntr += 1;
 				} else {
-					unknown_l_4 = 1;
-					*unknown_1 = 1;
-					if (unknown_1[4] > 0x2a0) {
-						unknown_1[4] = 0x2a0;
-					}
-					unknown_1[4] = ((unknown_1[4] - 0x80) * 0x7f) / 0x220;
+					pad_hd->active = ACTIVE;
+					active = ACTIVE;
+
+					if (pad_hd->max_rec_adc_val > 0x2a0)
+						pad_hd->max_rec_adc_val = 0x2a0;
+
+					pad_hd->max_rec_adc_val = ((pad_hd->max_rec_adc_val - 0x80) * 0x7f) / 0x220;
 				}
 			}
+
 		} else {
-			unknown_1[4] = 0;
-			unknown_1[1] = 0;
-			unknown_1[2] = 0x1e;
+			pad_hd->max_rec_adc_val = 0;
+			pad_hd->up_cntr = 0;
+			pad_hd->down_cntr = 0x1e;
 		}
 
-		bool unknown_l_6 = (unknown_l_4 == 2);
+		bool unknown_l_6 = (active == ACTIVE_UNKNOWN);
 		do {
 			if (unknown_l_6)
 				goto LAB_080033f6;
 
-			if (unknown_l_4 != 1) {
-				if (unknown_l_4 == 0) {
-					unknown_l_4 = UINT8_SELECTED_MODE_2000003f;
+			if (active != ACTIVE) {
+				if (active == INACTIVE) {
+					bool mode_not_cc_pad = (sel_mode != MODE_CC && sel_mode != MODE_PAD);
 
-					if (unknown_l_4 == 3) {
+					if (sel_mode == MODE_PROG_CHNG) {
 						pads_states[i].unknown0 = 0;
-					} else if (
-					    (
-					        (unknown_l_4 != 2 &&
-					         unknown_l_4 != 1)
-					        ||
-					        (*(uint8_t *)(sp_i4 + 4) != 1)
-					    )
-					    &&
-					    (sp_i4 = i * 5, *(uint8_t *)(pads_midi + sp_i4) == 1)
-					) {
-						*(uint8_t *)(pads_midi + sp_i4) = 0;
-						if (*(uint8_t *)(sp_i4 + 3) < 0x80) {
-							unknown_l_7 = sp_i4 + &pads_midi + 0x28;
-							uint8_t *unknown_l_8 = *(uint8_t *)(unknown_l_7 + 2);
-							uint8_t *unknown_l_9 = *(uint8_t *)(unknown_l_7 + 3);
-							uint8_t *unknown_l_10 = *(uint8_t *)(unknown_l_7 + 4);
-							*unknown_l_8 = 0;
-							if (unknown_l_4 == 1) {
-								*unknown_l_9 = 0;
-							} else if (unknown_l_4 == 2) {
-								*unknown_l_10 = 0;
-							}
-							write_midi_buffer(sp_i4 + &pads_midi + 1, 4);
+					} else if ((mode_not_cc_pad || sel_prog_settings->pads[i].type != TOGGLE)
+					           && pads_midi[i].state == PAD_STATE_PRESSED) {
+
+						if (pads_midi[i].data1 < 0x80) {
+							pads_states[i].prog_chng = 0;
+
+							if (sel_mode == 1)
+								pads_states[i].pad = 0;
+							else if (sel_mode == 2)
+								pads_states[i].cc;
+
+							write_midi_buffer(&pads_midi[i].cmd_msb, 4); // TODO: Check if cmd_msb really is transfered
 						}
 					}
 				}
-			}
-			goto LAB_080033f6;
-
-			uint8_t *unknown_l_11 = unknown_1 + 4;
-			uint32_t unknown_l_12;
-
-			if (*unknown_l_11 < 0x80) {
-				unknown_l_12 = *unknown_l_11;
-			} else {
-				unknown_l_12 = 0x7f;
+				goto LAB_080033f6;
 			}
 
-			unknown_l_4 = *(uint8_t *)(UNKNOWN_080056EC + 8 + unknown_l_12);
-			if (unknown_l_4 == 0) {
-				unknown_l_4 = 1;
-			} else if (0x7f < unknown_l_4) {
-				unknown_l_4 = 0x7f;
+			uint32_t midi_vel;
+
+			if (pad_hd->max_rec_adc_val <= MIDI_MAX_DATA_VAL)
+				midi_vel = pad_hd->max_rec_adc_val;
+			else
+				midi_vel = MIDI_MAX_DATA_VAL;
+
+			// Redundant, code above and below already ensure this lmao
+			// Maybe this was intended for a conversion to a non-linear scale?
+			// Kept for authenticity sake
+			midi_vel = plus_1_max_127[midi_vel];
+
+			if (midi_vel == 0) // Should never happen due to above...
+				midi_vel = 1;
+			else if (midi_vel > MIDI_MAX_DATA_VAL) // Again redundant...
+				midi_vel = MIDI_MAX_DATA_VAL;
+
+			if (sel_mode == MODE_PAD) {
+				data2_off = MIDI_MAX_DATA_VAL;
+				status_msb = 9;
+				data1 = sel_prog_settings->pads[i].note;
+				data2 = midi_vel;
+			} else if (sel_mode == MODE_CC) {
+				data2_off = 0;
+				status_msb = 0xb;
+				data1 = sel_prog_settings->pads[i].cc;
+				data2 = midi_vel;
+			} else if (sel_mode == MODE_PROG_CHNG) {
+				data2_off = 0;
+				status_msb = 0xc;
+				data1 = sel_prog_settings->pads[i].pc;
+				data2 = 0;
 			}
+		} while (sel_mode == MODE_PROG);
 
-			unknown_1 = UINT8_SELECTED_MODE_2000003f;
-
-			if (unknown_1 == 1) {
-				unknown_l_1 = 0x7f;
-				unknown_l_3 = *(uint8_t *)(sp_i4 + 1);
-				unknown_l_2 = 9;
-				unknown_l_0 = unknown_l_4;
-			} else if (unknown_1 == 2) {
-				unknown_l_1 = 0;
-				unknown_l_3 = *(uint8_t *)(sp_i4 + 3);
-				unknown_l_2 = 0xb;
-				unknown_l_0 = unknown_l_4;
-			} else if (unknown_1 == 3) {
-				unknown_l_0 = 0;
-				unknown_l_1 = 0;
-				unknown_l_3 = *(uint8_t *)(sp_i4 + 2);
-				unknown_l_2 = 0xc;
-			}
-			unknown_l_6 = unknown_1 == 0;
-		} while (unknown_l_6);
-
-		// unknown_l_5 = CONCAT12(unknown_l_3,CONCAT11(midi_ch | (byte)(unknown_l_2 << 4),(char)unknown_l_2));
-		// unknown_l_5 = CONCAT13(unknown_l_0, (uint3)unknown_l_5);
+		// unknown_l_5 = CONCAT12(data1,CONCAT11(midi_ch | (byte)(status_msb << 4),(char)status_msb));
+		// unknown_l_5 = CONCAT13(data2, (uint3)unknown_l_5);
 
 		uint32_t i5 = i * 5;
 		uint32_t *unknown_l_13 = pads_midi + 0x28 + i5;
@@ -1059,22 +864,22 @@ void FUN_08003130(void)
 
 		*unknown_l_14 = 1;
 
-		if (unknown_1 == 1) {
+		if (pad_hd == 1) {
 			*unknown_l_15 = 1;
-		} else if (unknown_1 == 2) {
+		} else if (pad_hd == 2) {
 			*unknown_l_16 = 1;
 		}
 
-		if (((unknown_1 == 2) || (unknown_1 == 1)) &&
-		    (*(uint8_t *)(sp_i4 + 4) == 1)) {
-			if (unknown_1 == (char *)0x1) {
+		if (((pad_hd == 2) || (pad_hd == 1)) &&
+		    (*(uint8_t *)(sel_prog_settings->pads[i].type) == 1)) {
+			if (pad_hd == (char *)0x1) {
 				sp_i4 = &pads_midi + 0x28;
 				bool *b1 = sp_i4 + i5;
 				uint8_t v1 = *(uint8_t *)(pads_midi + 0x28 + i5);
 				*b1 = v1 == 0;
 				unknown_l_17 = *(uint8_t *)(sp_i4 + i5);
 				if (unknown_l_17 == 0) {
-					// local_28 = CONCAT13(unknown_l_1,CONCAT12(unknown_l_3,CONCAT11(midi_ch,8))) | 0x8000;
+					// local_28 = CONCAT13(data2_off,CONCAT12(data1,CONCAT11(midi_ch,8))) | 0x8000;
 				}
 			}
 		} else {
@@ -1093,26 +898,26 @@ void FUN_08003130(void)
 			uint8_t *p3 = unknown_l_13 + 4;
 
 			*p1 = 0;
-			if (unknown_1 == 1) {
+			if (pad_hd == 1) {
 				*p2 = 0;
-			} else if (unknown_1 == 2) {
+			} else if (pad_hd == 2) {
 				*p3 = 0;
 			}
 		}
 
-		if (unknown_l_2 == 9) {
+		if (status_msb == 9) {
 			*(uint8_t *)(i5 + &pads_midi + 1) = 8;
 			*(uint8_t *)(i5 + &pads_midi + 2) = midi_ch | 0x80;
 		} else {
-			*(uint8_t *)(i5 + &pads_midi + 1) = (uint8_t)unknown_l_2;
+			*(uint8_t *)(i5 + &pads_midi + 1) = (uint8_t)status_msb;
 			// *(uint8_t *)(i5 + &pads_midi + 2) = unknown_l_5._1_1_;
 		}
 
-		*(uint8_t *)(i5 + &pads_midi + 3) = unknown_l_3;
-		*(uint8_t *)(i5 + &pads_midi + 4) = unknown_l_1;
+		*(uint8_t *)(i5 + &pads_midi + 3) = data1;
+		*(uint8_t *)(i5 + &pads_midi + 4) = data2_off;
 		*(uint8_t *)(&pads_midi + i5) = 1;
 
-		if (unknown_l_3 < 0x80) {
+		if (data1 < 0x80) {
 			// write_midi_buffer(&local_28,4);
 		}
 LAB_080033f6:
@@ -1126,10 +931,10 @@ LAB_080033f6:
  */
 void read_mode_pbs(void)
 {
-	uint8_t *systick_decr = UINT8_SYSTICK_DECREMENTER_1_2000003c;
-	uint8_t *debounce = UINT8_DEBOUNCE_COUNTER_2000003e;
-	uint16_t *prev_mode_pbs = UINT16_PREV_MODE_PB_IDR_BITS_20000044;
-	uint16_t *mode_pbs = UINT16_MODE_PB_IDR_BITS_CPY_20000048;
+	uint8_t *systick_decr = UINT8_SYSTICK_DECREMENTER_1_0x2000003c;
+	uint8_t *debounce = UINT8_DEBOUNCE_COUNTER_0x2000003e;
+	uint16_t *prev_mode_pbs = UINT16_PREV_MODE_PB_IDR_BITS_0x20000044;
+	uint16_t *mode_pbs = UINT16_MODE_PB_IDR_BITS_CPY_0x20000048;
 
 	// Mode Push buttons are read every 4 SysTick intervals.
 	if (*systick_decr != 0)
@@ -1172,11 +977,11 @@ void read_mode_pbs(void)
  */
 void eval_mode_pbs(void)
 {
-	const uint16_t mode_pbs = *(uint16_t *)UINT16_MODE_PB_IDR_BITS_CPY_20000048;
-	const uint8_t unknown_flag = *(uint8_t *)UINT8_UNKNOWN_FLAG_20000011;
+	const uint16_t mode_pbs = *(uint16_t *)UINT16_MODE_PB_IDR_BITS_CPY_0x20000048;
+	const uint8_t unknown_flag = *(uint8_t *)UINT8_UNKNOWN_FLAG_0x20000011;
 
-	unknown *prev_mode_pbs = UINT16_PREV_MODE_PB_IDR_BITS_20000046;
-	mode_t *selected_mode = UINT8_SELECTED_MODE_2000003f;
+	unknown *prev_mode_pbs = UINT16_PREV_MODE_PB_IDR_BITS_0x20000046;
+	mode_t *selected_mode = UINT8_SELECTED_MODE_0x2000003f;
 
 	if (*prev_mode_pbs != mode_pbs) {
 
@@ -1217,7 +1022,7 @@ void eval_mode_pbs(void)
 void rst_pads(void)
 {
 	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;	 // -> pad_midi[N_PADS]
-	pad_states *pads_states = PAD_STATES_8_20000552; // -> pad_states[N_PADS]
+	pad_states *pads_states = PAD_STATES_8_0x20000552; // -> pad_states[N_PADS]
 
 	for (uint8_t i = 0; i < N_PADS; i++) {
 		if (pads_midi[i].state == PAD_STATE_PRESSED) {
@@ -1249,11 +1054,11 @@ void rst_pads(void)
  */
 void update_pad_leds()
 {
-	const mode_t selected_mode = *(uint8_t *)UINT8_SELECTED_MODE_2000003f; // uint8_t
+	const mode_t selected_mode = *(uint8_t *)UINT8_SELECTED_MODE_0x2000003f; // uint8_t
 
 	mode_t *prev_mode = UINT8_PREV_MODE_0x20000031;			 // uint8_t
-	pad_state_t *prev_pads_state = UINT8_8_PREV_PADS_STATE_20000033; // -> pad_state_t[N_PADS]
-	pad_states *pads_states = PAD_STATES_8_20000552;		 // -> pad_states[N_PADS]
+	pad_state_t *prev_pads_state = UINT8_8_PREV_PADS_STATE_0x20000033; // -> pad_state_t[N_PADS]
+	pad_states *pads_states = PAD_STATES_8_0x20000552;		 // -> pad_states[N_PADS]
 
 	// For every Pad
 	for (uint8_t i = 0; i < N_PADS; i++) {
@@ -1362,15 +1167,15 @@ void update_pad_leds()
  */
 void update_leds(void)
 {
-	const uint8_t unknown_flag = *(uint8_t *)UINT8_UNKNOWN_FLAG_20000011; // uint8_t
-	const mode_t selected_mode = *(mode_t *)UINT8_SELECTED_MODE_2000003f; // uint8_t
-	const int unknown_enum = *(int *)UNKNOWN_ENUM_20000012;		      // unknown
+	const uint8_t unknown_flag = *(uint8_t *)UINT8_UNKNOWN_FLAG_0x20000011; // uint8_t
+	const mode_t selected_mode = *(mode_t *)UINT8_SELECTED_MODE_0x2000003f; // uint8_t
+	const int unknown_enum = *(int *)UNKNOWN_ENUM_0x20000012;		      // unknown
 
-	mode_t *prev_mode = UINT8_PREV_MODE_20000043;			 // -> uint8_t
-	uint8_t *selected_prog = UINT8_SELECTED_PROG_20000042;		 // -> uint8_t
-	uint8_t *prev_selected_prog = UINT8_PREV_SELECTED_PROG_20000032; // -> uint8_t
+	mode_t *prev_mode = UINT8_PREV_MODE_0x20000043;			 // -> uint8_t
+	uint8_t *selected_prog = UINT8_SELECTED_PROG_0x20000042;		 // -> uint8_t
+	uint8_t *prev_selected_prog = UINT8_PREV_SELECTED_PROG_0x20000032; // -> uint8_t
 	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;			 // -> pad_midi[N_PADS]
-	pad_states *pads_states = PAD_STATES_8_20000552;		 // -> pad_states[N_PADS]
+	pad_states *pads_states = PAD_STATES_8_0x20000552;		 // -> pad_states[N_PADS]
 
 	// I have yet to find out what sets this flag != 0
 	if (unknown_flag == 0) {
@@ -1545,13 +1350,13 @@ void reload_IWDG(void)
  */
 void deinit_midi_buffer(void)
 {
-	uint8_t *midi_buf_rem_space = UINT8_MIDI_BUFFER_REMAINING_SPACE_20000004;
-	uint8_t **midi_buf_tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_2000000c;
-	uint8_t **midi_buf_head = UINT8_PTR_PTR_MIDI_BUFFER_HEAD_20000008;
+	uint8_t *midi_buf_rem_space = UINT8_MIDI_BUFFER_REMAINING_SPACE_0x20000004;
+	uint8_t **midi_buf_tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c;
+	uint8_t **midi_buf_head = UINT8_PTR_PTR_MIDI_BUFFER_HEAD_0x20000008;
 
 	*midi_buf_rem_space = 0;
-	*midi_buf_tail = UINT8_PTR_MIDI_BUFFER_TAIL_2000015c;
-	*midi_buf_head = UINT8_PTR_MIDI_BUFFER_TAIL_2000015c;
+	*midi_buf_tail = UINT8_PTR_MIDI_BUFFER_TAIL_0x2000015c;
+	*midi_buf_head = UINT8_PTR_MIDI_BUFFER_TAIL_0x2000015c;
 }
 
 /**
@@ -1560,9 +1365,9 @@ void deinit_midi_buffer(void)
  */
 void main_loop()
 {
-	uint8_t *unknown_flag_0 = UINT8_UNKNOWN_FLAG_20000000;
-	uint8_t *unknown_flag_1 = UINT8_UNKNOWN_FLAG_20000098;
-	mode_t *prev_mode = UINT8_PREV_MODE_20000043;
+	uint8_t *unknown_flag_0 = UINT8_UNKNOWN_FLAG_0x20000000;
+	uint8_t *unknown_flag_1 = UINT8_UNKNOWN_FLAG_0x20000098;
+	mode_t *prev_mode = UINT8_PREV_MODE_0x20000043;
 
 	FUN_08004ef0();
 	FUN_08005318();
