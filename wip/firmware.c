@@ -4,7 +4,7 @@
 #include <stm32f103xb.h>
 #include <stm32f1xx_hal.h>
 
-#define CONST_UINT8_8_LUT_8TO15_080056EC 0x080056EC // = [8, 9, 10, 11, 12, 13, 14, 15]
+#define CONST_UINT8_8_LUT_8TO15_080056EC 0x080056EC    // = [8, 9, 10, 11, 12, 13, 14, 15]
 #define CONST_UINT8_127_LUT_1TO127_080056E4 0x080056E4 // = [1, 2, ... 126, 127, 127]
 
 #define UINT8_UNKNOWN_FLAG_0x20000000 0x20000000
@@ -89,6 +89,15 @@
 #define ADC_KNOB_CHANGE_THRESHOLD 7
 #define ADC_KNOB_NOISE_GATE 15 // 0x0F
 #define MAX_ADC_KNOB_VAL 0x3FF
+#define MAX_ADC_PAD_VAL 0x2A0
+#define PAD_ADC_CONSIDERED_RELEASED 64
+#define PAD_ADC_CONSIDERED_PRESSED MIDI_MAX_DATA_VAL + 2
+#define PAD_UP_COUNT_COMPLETE 4
+#define PAD_DOWN_COUNT_START 30
+#define PAD_MODE_RELEASE_DATA2 MIDI_MAX_DATA_VAL
+#define CC_MODE_RELEASE_DATA2 0x00
+#define PROG_CHNG_MODE_RELEASE_DATA2 0x00
+#define PROG_CHNG_MODE_PRESS_DATA2 0x00
 #define N_PADS 8
 #define N_KNOBS 8
 #define N_PADS_OR_KNOBS 8
@@ -133,18 +142,20 @@ typedef uint8_t ready_t;
 #define NOT_READY 0x0
 #define READY 0x1
 
-typedef uint8_t pad_active_t;
-#define INACTIVE 0x0
-#define ACTIVE 0x1
-#define ACTIVE_UNKNOWN 0x2
+typedef uint8_t pad_confirmed_t;
+#define CONFIRMED_RELEASED 0x0
+#define CONFIRMED_PRESSED 0x1
+#define UNCONFIRMED 0x2
 
-typedef struct {
+typedef struct
+{
 	uint32_t gpios;
 	uint32_t other_cr_bits; // CNF + MODE, only used if op == GPIO_CFG_OP_OTHER
 	gpio_operation_t op;
 } gpio_cfg;
 
-typedef struct {
+typedef struct
+{
 	pad_state_t state;
 	midi_cmd_msb_t cmd_msb;
 	uint8_t cmd;
@@ -153,7 +164,8 @@ typedef struct {
 } pad_midi;
 
 // These appear to be updated on on-push and on-release events only
-typedef struct {
+typedef struct
+{
 	pad_state_t unknown0;
 	pad_state_t unknown1;
 	pad_state_t prog_chng; // offset: 2
@@ -161,28 +173,32 @@ typedef struct {
 	pad_state_t cc;	       // offset: 4
 } pad_states;
 
-typedef struct {
+typedef struct
+{
 	uint8_t note;
 	uint8_t pc;
 	uint8_t cc;
 	push_setting_t type;
 } pad_settings;
 
-typedef struct {
-	pad_active_t active;
+typedef struct
+{
+	pad_confirmed_t confirmed_state;
 	uint8_t up_cntr;
 	uint8_t down_cntr;
 	uint8_t unknown0;
-	uint8_t max_rec_adc_val;
+	uint16_t adc_eval;
 } pad_handling_data;
 
-typedef struct {
+typedef struct
+{
 	uint8_t cc;
 	uint8_t leftmost;
 	uint8_t rightmost;
 } knob_settings;
 
-typedef struct {
+typedef struct
+{
 	uint8_t midi_ch;
 	pad_settings pads[N_PADS];
 	knob_settings knobs[N_KNOBS];
@@ -388,21 +404,29 @@ void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint
 	uint32_t *ADC_SQR2 = adc_base + ADC_SQR2_OFFSET;
 	uint32_t *ADC_SQR3 = adc_base + ADC_SQR3_OFFSET;
 
-	if (channel < 10) {
+	if (channel < 10)
+	{
 		*ADC_SMPR2 &= ~(ADC_SMPR2_SMP0 << (channel * 3));
 		*ADC_SMPR2 |= smp_bits << (channel * 3);
-	} else {
+	}
+	else
+	{
 		*ADC_SMPR1 &= ~(ADC_SMPR1_SMP10 << ((channel - 10) * 3));
 		*ADC_SMPR1 |= smp_bits << ((channel - 10) * 3);
 	}
 
-	if (nth_conv < 7) {
+	if (nth_conv < 7)
+	{
 		*ADC_SQR3 &= ~(ADC_SQR3_SQ1 << ((nth_conv - 1) * 5));
 		*ADC_SQR3 |= channel << ((nth_conv - 1) * 5);
-	} else if (nth_conv < 13) {
+	}
+	else if (nth_conv < 13)
+	{
 		*ADC_SQR2 &= ~(ADC_SQR2_SQ7 << ((nth_conv - 7) * 5));
 		*ADC_SQR2 |= channel << ((nth_conv - 7) * 5);
-	} else {
+	}
+	else
+	{
 		*ADC_SQR1 &= ~(ADC_SQR1_SQ13 << ((nth_conv - 0xd) * 5));
 		*ADC_SQR1 |= channel << ((nth_conv - 0xd) * 5);
 	}
@@ -448,13 +472,16 @@ void cfg_gpios(uint32_t *gpio_base, gpio_cfg *gpio_cfg)
 		cnf_mode_bits |= gpio_cfg->other_cr_bits;
 
 	// Configure GPIO's 0-7, if any of them must be configured
-	if (gpio_cfg->gpios & 0xFF) {
+	if (gpio_cfg->gpios & 0xFF)
+	{
 		uint32_t crl = *GPIO_CRL;
 
-		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++) {
+		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++)
+		{
 			uint8_t msk = 1 << i_gpio;
 
-			if (gpio_cfg->gpios & msk) {
+			if (gpio_cfg->gpios & msk)
+			{
 				crl &= ~(GPIO_CR_CNF_MODE << (i_gpio * 4));
 				crl |= cnf_mode_bits << (i_gpio * 4);
 
@@ -468,13 +495,16 @@ void cfg_gpios(uint32_t *gpio_base, gpio_cfg *gpio_cfg)
 	}
 
 	// Same logic as above, but for GPIO's 8-15
-	if (gpio_cfg->gpios > 0xFF) {
+	if (gpio_cfg->gpios > 0xFF)
+	{
 		uint32_t crh = *GPIO_CRH;
 
-		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++) {
+		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++)
+		{
 			uint8_t msk = 1 << (i_gpio + 8); // + 8 due to GPIO's 8-15
 
-			if (gpio_cfg->gpios & msk) {
+			if (gpio_cfg->gpios & msk)
+			{
 				crh &= ~(GPIO_CR_CNF_MODE << (i_gpio * 4));
 				crh |= cnf_mode_bits << (i_gpio * 4);
 
@@ -503,12 +533,14 @@ void write_midi_buffer(void *data, uint32_t size)
 	uint8_t **head = UINT8_PTR_PTR_MIDI_BUFFER_HEAD_0x20000008;
 	uint8_t **tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c; // buffer_end - MIDI_BUFFER_SIZE
 
-	for (uint8_t i = 0; i < size; i++) {
+	for (uint8_t i = 0; i < size; i++)
+	{
 		uint8_t *next_element = *head + 1;
 
 		// When buffer_end is reached, continue buffer
 		// writing at buffer_end - MIDI_BUFFER_SIZE
-		if (next_element == buffer_end) {
+		if (next_element == buffer_end)
+		{
 			next_element = *tail; // 0x2000015C
 		}
 
@@ -566,7 +598,8 @@ void eval_knobs(void)
 	if (midi_ch > MIDI_MAX_CHANNEL)
 		midi_ch = 0;
 
-	for (uint8_t i = 0; i < N_KNOBS; i++) {
+	for (uint8_t i = 0; i < N_KNOBS; i++)
+	{
 		uint8_t knob_cc = sel_prog_settings->knobs[i].cc;
 		uint8_t knob_rightmost = sel_prog_settings->knobs[i].rightmost;
 		uint8_t knob_leftmost = sel_prog_settings->knobs[i].leftmost;
@@ -585,9 +618,9 @@ void eval_knobs(void)
 
 		// Only update if knob has been moved beyond threshold
 		if (!EXCEEDS_THRESHOLD(
-		        _knob_adc_val,
-		        _prev_accepted_knob_adc_val,
-		        ADC_KNOB_CHANGE_THRESHOLD))
+			_knob_adc_val,
+			_prev_accepted_knob_adc_val,
+			ADC_KNOB_CHANGE_THRESHOLD))
 			continue;
 
 		/* Scale ADC value to range specified by knob_leftmost and knob_rightmost
@@ -624,19 +657,22 @@ void eval_knobs(void)
 
 		uint8_t scaled;
 
-		if (knob_leftmost < knob_rightmost) {
+		if (knob_leftmost < knob_rightmost)
+		{
 			uint8_t range = (knob_rightmost - knob_leftmost) + 1;
 			scaled = knob_leftmost +
-			         (_knob_adc_val * range) /
-			         (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
+				 (_knob_adc_val * range) /
+				     (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
 
 			if (knob_rightmost < scaled)
 				scaled = knob_rightmost;
-		} else {
+		}
+		else
+		{
 			uint8_t range = (knob_rightmost - knob_leftmost) + 1;
 			scaled = knob_leftmost -
-			         (_knob_adc_val * range) /
-			         (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
+				 (_knob_adc_val * range) /
+				     (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
 
 			if (knob_rightmost > knob_leftmost)
 				scaled = knob_rightmost;
@@ -645,7 +681,8 @@ void eval_knobs(void)
 		if (scaled > MIDI_MAX_DATA_VAL)
 			scaled = MIDI_MAX_DATA_VAL;
 
-		if (*prev_knob_scaled_val != scaled) {
+		if (*prev_knob_scaled_val != scaled)
+		{
 
 			/*
 			 * Filter "spikes", ie. very short changes in values
@@ -661,13 +698,15 @@ void eval_knobs(void)
 			if (*prev_prev_knob_scaled_val == scaled &&
 			    *scaled_knob_val_changed &&
 			    !EXCEEDS_THRESHOLD(
-			        _prev_accepted_knob_adc_val,
-			        _knob_adc_val,
-			        ADC_KNOB_NOISE_GATE))
+				_prev_accepted_knob_adc_val,
+				_knob_adc_val,
+				ADC_KNOB_NOISE_GATE))
 				continue;
 
 			*scaled_knob_val_changed = true;
-		} else {
+		}
+		else
+		{
 			*scaled_knob_val_changed = false;
 		}
 
@@ -679,16 +718,16 @@ void eval_knobs(void)
 		 * The SysTick decrementer is likely employed to
 		 * prevent flooding the MIDI buffer.
 		 */
-		if (systick_decr_0 == 0) {
+		if (systick_decr_0 == 0)
+		{
 
 			if (knob_cc > MIDI_MAX_DATA_VAL)
 				knob_cc = MIDI_MAX_DATA_VAL;
 
 			uint8_t data[4] = {
-				MIDI_CMD_CC_MSB | midi_ch,
-				knob_cc, scaled,
-				0x00
-			};
+			    MIDI_CMD_CC_MSB | midi_ch,
+			    knob_cc, scaled,
+			    0x00};
 
 			write_midi_buffer(&data, sizeof(data));
 		}
@@ -707,16 +746,13 @@ void FUN_08003130(void)
 	const uint8_t *plus_1_max_127 = CONST_UINT8_127_LUT_1TO127_080056E4;
 	const mode_t sel_mode = *(uint8_t *)UINT8_SELECTED_MODE_0x2000003f;
 
-
-	uint8_t active;
 	unknown unknown_l_5;
-	uint32_t *unknown_1;
 	uint8_t unknown_l_17;
 
-	uint8_t data2 = 0;
-	uint8_t data2_off = 0;
 	uint8_t status_msb = 0;
 	uint8_t data1 = 0;
+	uint8_t data2_press = 0;
+	uint8_t data2_release = 0;
 
 	uint8_t *ready = UINT8_UNKNOWN_READY_0x20000041;
 	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;
@@ -737,183 +773,260 @@ void FUN_08003130(void)
 		midi_ch = 0;
 
 	// unknown_l_5 = in_r3;
-	for (uint8_t i = 0; i < N_PADS; i++) {
+	for (uint8_t i = 0; i < N_PADS; i++)
+	{
 
-		active = ACTIVE_UNKNOWN;
+		uint8_t confirmed_state = UNCONFIRMED;
 		pad_handling_data *pad_hd = &pads_hd[i];
-		uint8_t sp_i4 = *(uint8_t *)(sel_prog_settings + i * 4);
-		uint16_t pad_adc_val = pad_adc_vals[i];
+		adc_val_t pad_adc_val = pad_adc_vals[i];
+		pad_states *states = &pads_states[i];
+		pad_settings *settings = &sel_prog_settings->pads[i];
+		pad_midi *midi = &pads_midi[i];
 
-		if (pad_hd->active == ACTIVE) {
+		if (pad_hd->confirmed_state == CONFIRMED_PRESSED)
+		{
+			if (pad_adc_val <= PAD_ADC_CONSIDERED_RELEASED)
+			{
 
-			if (pad_adc_val <= 0x40) {
-
-				if (pad_hd->down_cntr == 0) {
-					pad_hd->active = INACTIVE;
-					active = INACTIVE;
-				} else {
+				if (pad_hd->down_cntr == 0)
+				{
+					pad_hd->confirmed_state = CONFIRMED_RELEASED;
+					confirmed_state = CONFIRMED_RELEASED;
+				}
+				else
+				{
 					pad_hd->down_cntr -= 1;
 				}
 
-				pad_hd->max_rec_adc_val = 0;
+				pad_hd->adc_eval = 0;
 				pad_hd->up_cntr = 0;
-			} else {
-				pad_hd->down_cntr = 0x1e;
+			}
+			else
+			{
+				pad_hd->down_cntr = PAD_DOWN_COUNT_START;
+			}
+		}
+		else if (pad_hd->confirmed_state == CONFIRMED_RELEASED &&
+			 pad_adc_val >= PAD_ADC_CONSIDERED_PRESSED)
+		{
+
+			if (pad_hd->up_cntr == 0 ||
+			    pad_hd->adc_eval < pad_adc_val)
+			{
+				pad_hd->adc_eval = pad_adc_val;
 			}
 
-		} else if (pad_hd->active == INACTIVE) {
-
-			if (pad_adc_val > 0x80) {
-
-				if (pad_hd->up_cntr == 0 ||
-				    pad_hd->max_rec_adc_val < pad_adc_val)
-					pad_hd->max_rec_adc_val = pad_adc_val;
-
-				if (pad_hd->up_cntr < 4) {
-					pad_hd->up_cntr += 1;
-				} else {
-					pad_hd->active = ACTIVE;
-					active = ACTIVE;
-
-					if (pad_hd->max_rec_adc_val > 0x2a0)
-						pad_hd->max_rec_adc_val = 0x2a0;
-
-					pad_hd->max_rec_adc_val = ((pad_hd->max_rec_adc_val - 0x80) * 0x7f) / 0x220;
-				}
+			if (pad_hd->up_cntr < PAD_UP_COUNT_COMPLETE)
+			{
+				pad_hd->up_cntr += 1;
 			}
+			else
+			{
+				pad_hd->confirmed_state = CONFIRMED_PRESSED;
+				confirmed_state = CONFIRMED_PRESSED;
 
-		} else {
-			pad_hd->max_rec_adc_val = 0;
+				if (pad_hd->adc_eval > MAX_ADC_PAD_VAL)
+					pad_hd->adc_eval = MAX_ADC_PAD_VAL;
+
+				/* Scale ADC value to MIDI range (0x00 - 0x7F)
+				 * Scaling is done with the following formula:
+				 * 	scaled = ((a - (mm + 1)) / (ma - mm)) * mm
+				 * Where:
+				 * 	- mm is the maximum MIDI data value (0x7F)
+				 * 	- ma is the maximum allowed/possible ADC value (0x2A0)
+				 * 		- Note that the lower limit is set by
+				 * 		  PAD_ADC_CONSIDERED_PRESSED, which is
+				 * 		  mm + 2. This prevents a underflow.
+				 * 	- a is the maximum recorded ADC value (caps at ma)
+				 *
+				 * (a - mm + 1) / (ma - mm) is the percentage, which is then
+				 * multiplied by mm to get the scaled MIDI value (0x00 - 0x7F)
+				 *
+				 * To avoid the need for floating point arithmetic, the formula
+				 * has rewritten to:
+				 * 	scaled = ((a - (mm + 1)) * mm) / (ma - mm)
+				 * The product of (a - (mm + 1)) * mm is likely to be large, allowing
+				 * better precision when dividing by (ma - mm) without the need for
+				 * floating point arithmetic.
+				 *
+				 * TODO: Check what happens if adc_eval == 0
+				 */
+				const uint32_t num = (pad_hd->adc_eval - (MIDI_MAX_DATA_VAL + 1)) * MIDI_MAX_DATA_VAL;
+				const uint16_t den = MAX_ADC_PAD_VAL - MIDI_MAX_DATA_VAL;
+				pad_hd->adc_eval = num / den;
+			}
+		}
+		else
+		{
+			// TODO: Research if it is even possible to enter this branch
+			pad_hd->adc_eval = 0;
 			pad_hd->up_cntr = 0;
-			pad_hd->down_cntr = 0x1e;
+			pad_hd->down_cntr = PAD_DOWN_COUNT_START;
 		}
 
-		do {
-			if (active == ACTIVE_UNKNOWN)
-				goto LAB_080033f6;
+		// Porbably redudant as it is most likely only true if confirmed_state == UNCONFIRMED
+		bool not_p_r = (confirmed_state != CONFIRMED_PRESSED &&
+				confirmed_state != CONFIRMED_RELEASED);
 
-			if (active != ACTIVE) {
-				if (active == INACTIVE) {
-					bool mode_not_cc_pad = (sel_mode != MODE_CC && sel_mode != MODE_PAD);
+		if (confirmed_state == UNCONFIRMED || not_p_r)
+			continue;
 
-					if (sel_mode == MODE_PROG_CHNG) {
-						pads_states[i].unknown0 = PAD_STATE_RELEASED;
-					} else if ((mode_not_cc_pad || sel_prog_settings->pads[i].type != TOGGLE)
-					           && pads_midi[i].state == PAD_STATE_PRESSED) {
+		if (confirmed_state == CONFIRMED_RELEASED)
+		{
+			bool mode_not_cc_pad = (sel_mode != MODE_CC && sel_mode != MODE_PAD);
 
-						if (pads_midi[i].data1 <= MIDI_MAX_DATA_VAL) {
-							pads_states[i].prog_chng = PAD_STATE_RELEASED;
+			if (sel_mode == MODE_PROG_CHNG)
+			{
+				states->unknown0 = PAD_STATE_RELEASED;
+			}
+			else if ((mode_not_cc_pad || settings->type != TOGGLE) &&
+				 midi->state == PAD_STATE_PRESSED)
+			{
 
-							if (sel_mode == MODE_PAD)
-								pads_states[i].pad = PAD_STATE_RELEASED;
-							else if (sel_mode == MODE_CC)
-								pads_states[i].cc;
+				midi->state = PAD_STATE_RELEASED;
 
-							write_midi_buffer(&pads_midi[i].cmd_msb, 4); // TODO: Check if cmd_msb really is transfered
-						}
-					}
+				if (midi->data1 <= MIDI_MAX_DATA_VAL)
+				{
+					states->prog_chng = PAD_STATE_RELEASED;
+
+					if (sel_mode == MODE_PAD)
+						states->pad = PAD_STATE_RELEASED;
+					else if (sel_mode == MODE_CC)
+						states->cc;
+
+					write_midi_buffer(&midi->cmd_msb, 4); // TODO: Check if cmd_msb really is transfered
 				}
-				goto LAB_080033f6;
 			}
 
-			uint32_t midi_vel;
+			continue;
+		}
 
-			if (pad_hd->max_rec_adc_val <= MIDI_MAX_DATA_VAL)
-				midi_vel = pad_hd->max_rec_adc_val;
-			else
-				midi_vel = MIDI_MAX_DATA_VAL;
+		// Confirmed Pressed
 
-			// Redundant, code above and below already ensure this lmao
-			// Maybe this was intended for a conversion to a non-linear scale?
-			// Kept for authenticity sake
-			midi_vel = plus_1_max_127[midi_vel];
+		uint32_t _midi_vel;
 
-			if (midi_vel == 0) // Should never happen due to above...
-				midi_vel = 1;
-			else if (midi_vel > MIDI_MAX_DATA_VAL) // Again redundant...
-				midi_vel = MIDI_MAX_DATA_VAL;
+		if (pad_hd->adc_eval <= MIDI_MAX_DATA_VAL)
+			_midi_vel = pad_hd->adc_eval;
+		else
+			_midi_vel = MIDI_MAX_DATA_VAL;
 
-			if (sel_mode == MODE_PAD) {
-				data2_off = MIDI_MAX_DATA_VAL;
-				status_msb = 0x09;
-				data1 = sel_prog_settings->pads[i].note;
-				data2 = midi_vel;
-			} else if (sel_mode == MODE_CC) {
-				data2_off = 0;
-				status_msb = 0x0b;
-				data1 = sel_prog_settings->pads[i].cc;
-				data2 = midi_vel;
-			} else if (sel_mode == MODE_PROG_CHNG) {
-				data2_off = 0;
-				status_msb = 0x0c;
-				data1 = sel_prog_settings->pads[i].pc;
-				data2 = 0;
-			}
-		} while (sel_mode == MODE_PROG);
+		/*
+		 * Redundt as guards above and below already ensure this
+		 * Maybe this was intended for a conversion to a non-linear scale?
+		 * Kept for authenticity sake
+		 */
+		uint8_t midi_vel = plus_1_max_127[_midi_vel];
 
-		// unknown_l_5 = CONCAT12(data1,CONCAT11(midi_ch | (byte)(status_msb << 4),(char)status_msb));
-		// unknown_l_5 = CONCAT13(data2, (uint3)unknown_l_5);
+		if (midi_vel == 0) // Should never happen due to line above...
+			midi_vel = 1;
+		else if (midi_vel > MIDI_MAX_DATA_VAL) // Again redundant...
+			midi_vel = MIDI_MAX_DATA_VAL;
 
-		pads_states[i].prog_chng = PAD_STATE_PRESSED;
+		// Prepare MIDI message
 
 		if (sel_mode == MODE_PAD)
-			pads_states[i].pad = PAD_STATE_PRESSED;
+		{
+			status_msb = MIDI_CMD_NOTE_ON_MSB;
+			data1 = settings->note;
+			data2_press = midi_vel;
+			data2_release = PAD_MODE_RELEASE_DATA2;
+		}
 		else if (sel_mode == MODE_CC)
-			pads_states[i].cc = PAD_STATE_PRESSED;
+		{
+			status_msb = MIDI_CMD_CC_MSB;
+			data1 = settings->cc;
+			data2_press = midi_vel;
+			data2_release = CC_MODE_RELEASE_DATA2;
+		}
+		else if (sel_mode == MODE_PROG_CHNG)
+		{
+			status_msb = MIDI_CMD_PROG_CHNG_MSB;
+			data1 = settings->pc;
+			data2_press = PROG_CHNG_MODE_PRESS_DATA2;
+			data2_release = PROG_CHNG_MODE_RELEASE_DATA2;
+		}
+		else if (sel_mode == MODE_PROG)
+		{
+			continue;
+		}
+
+		break;
+
+		// unknown_l_5 = CONCAT12(data1,CONCAT11(midi_ch | (byte)(status_msb << 4),(char)status_msb));
+		// unknown_l_5 = CONCAT13(data2_press, (uint3)unknown_l_5);
+
+		states->prog_chng = PAD_STATE_PRESSED;
+
+		if (sel_mode == MODE_PAD)
+			states->pad = PAD_STATE_PRESSED;
+		else if (sel_mode == MODE_CC)
+			states->cc = PAD_STATE_PRESSED;
 
 		bool is_cc_pad = (sel_mode == MODE_CC) || (sel_mode == MODE_PAD);
-		if (is_cc_pad && sel_prog_settings->pads[i].type == TOGGLE) {
+		if (is_cc_pad && settings->type == TOGGLE)
+		{
 
-			if (sel_mode == MODE_PAD) {
+			if (sel_mode == MODE_PAD)
+			{
 
-				pads_states[i].unknown0  = (pads_states[i].unknown0 == PAD_STATE_RELEASED)
-				                           ? PAD_STATE_PRESSED : PAD_STATE_RELEASED;
+				states->unknown0 = (states->unknown0 == PAD_STATE_RELEASED)
+						       ? PAD_STATE_PRESSED
+						       : PAD_STATE_RELEASED;
 
-				unknown_l_17 = pads_states[i].unknown0;
+				unknown_l_17 = states->unknown0;
 
-				if (unknown_l_17 == PAD_STATE_RELEASED) {
-					// local_28 = CONCAT13(data2_off,CONCAT12(data1,CONCAT11(midi_ch,8))) | 0x8000;
+				if (unknown_l_17 == PAD_STATE_RELEASED)
+				{
+					// local_28 = CONCAT13(data2_release,CONCAT12(data1,CONCAT11(midi_ch,8))) | 0x8000;
 				}
 			}
-		} else {
-			pads_states[i].unknown1 = (pads_states[i].unknown1 == PAD_STATE_RELEASED)
-			                          ? PAD_STATE_PRESSED : PAD_STATE_RELEASED;
+		}
+		else
+		{
+			states->unknown1 = (states->unknown1 == PAD_STATE_RELEASED)
+					       ? PAD_STATE_PRESSED
+					       : PAD_STATE_RELEASED;
 
-			unknown_l_17 = pads_states[i].unknown1;
-			if (unknown_l_17 == PAD_STATE_RELEASED) {
+			unknown_l_17 = states->unknown1;
+			if (unknown_l_17 == PAD_STATE_RELEASED)
+			{
 				// local_28 = (uint)(uint3)local_28;
 			}
 		}
 
-		if (unknown_l_17 == PAD_STATE_RELEASED) {
-			pads_states[i].prog_chng = PAD_STATE_RELEASED;
+		if (unknown_l_17 == PAD_STATE_RELEASED)
+		{
+			states->prog_chng = PAD_STATE_RELEASED;
 
 			if (sel_mode == MODE_PAD)
-				pads_states[i].pad = PAD_STATE_RELEASED;
+				states->pad = PAD_STATE_RELEASED;
 			else if (sel_mode == MODE_CC)
-				pads_states[i].cc = PAD_STATE_RELEASED;
+				states->cc = PAD_STATE_RELEASED;
 		}
 
-		if (status_msb == MIDI_CMD_NOTE_ON_MSB) {
-			pads_midi[i].cmd_msb = MIDI_CMD_NOTE_OFF_MSB;
-			pads_midi[i].cmd = midi_ch | (MIDI_CMD_NOTE_OFF_MSB << 4);
-		} else {
+		if (status_msb == MIDI_CMD_NOTE_ON_MSB)
+		{
+			midi->cmd_msb = MIDI_CMD_NOTE_OFF_MSB;
+			midi->cmd = midi_ch | (MIDI_CMD_NOTE_OFF_MSB << 4);
+		}
+		else
+		{
 			// *(uint8_t *)(i*5 + &pads_midi + 2) = unknown_l_5._1_1_;
-			pads_midi[i].cmd_msb = status_msb;
-			pads_midi[i].cmd = midi_ch | (status_msb << 4); // TODO: Confirm
+			midi->cmd_msb = status_msb;
+			midi->cmd = midi_ch | (status_msb << 4); // TODO: Confirm
 		}
 
-		pads_midi[i].state = PAD_STATE_PRESSED;
-		pads_midi[i].data1 = data1;
-		pads_midi[i].data2 = data2_off;
+		midi->state = PAD_STATE_PRESSED;
+		midi->data1 = data1;
+		midi->data2 = data2_release;
 
-		if (data1 <= MIDI_MAX_DATA_VAL) {
+		if (data1 <= MIDI_MAX_DATA_VAL)
+		{
 			// write_midi_buffer(&local_28,4);
 		}
-LAB_080033f6:
+	next_pad:
 	}
 }
-
 
 /**
  * @ 0x08003d10
@@ -934,7 +1047,8 @@ void read_mode_pbs(void)
 
 	// Read mode push buttons. Negation due to PU's.
 	const uint32_t _mode_pbs = ~(PB_GPIO_PORT->IDR) & PB_IDR_MSK;
-	if (*prev_mode_pbs != _mode_pbs) {
+	if (*prev_mode_pbs != _mode_pbs)
+	{
 		*debounce = 0;
 		*prev_mode_pbs = _mode_pbs;
 		return;
@@ -954,7 +1068,8 @@ void read_mode_pbs(void)
 	 * Perhaps this is some compiler bogus related to the data type of the
 	 * debounce counter? Not sure...
 	 */
-	if (*debounce < 240) {
+	if (*debounce < 240)
+	{
 		if (++(*debounce) == MODE_PB_DEBOUNCE_THRESHOLD)
 			*mode_pbs = _mode_pbs;
 	}
@@ -973,20 +1088,21 @@ void eval_mode_pbs(void)
 	unknown *prev_mode_pbs = UINT16_PREV_MODE_PB_IDR_BITS_0x20000046;
 	mode_t *selected_mode = UINT8_SELECTED_MODE_0x2000003f;
 
-	if (*prev_mode_pbs != mode_pbs) {
+	if (*prev_mode_pbs != mode_pbs)
+	{
 
 		*prev_mode_pbs = mode_pbs;
 
 		// Suspecting this is some sort of debug flag...
-		if (unknown_flag != 0) {
+		if (unknown_flag != 0)
+		{
 
 			// Shift bits to start at bit 0. PROG is first GPIO.
 			uint8_t shifted2lsbits = (mode_pbs >> PB_PROG_GPIO);
 
 			// Terminates some sort of SysEx message that conveys mode pb gpio info??!
 			uint8_t data[12] = {0x04, 0x47, 0x00, 0x75, 0x04, 0x6b, 0x00, 0x02,
-			                    0x07, 0x5a, shifted2lsbits, 0xf7
-			                   };
+					    0x07, 0x5a, shifted2lsbits, 0xf7};
 
 			return;
 		}
@@ -1011,11 +1127,13 @@ void eval_mode_pbs(void)
  */
 void rst_pads(void)
 {
-	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;	 // -> pad_midi[N_PADS]
+	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;	   // -> pad_midi[N_PADS]
 	pad_states *pads_states = PAD_STATES_8_0x20000552; // -> pad_states[N_PADS]
 
-	for (uint8_t i = 0; i < N_PADS; i++) {
-		if (pads_midi[i].state == PAD_STATE_PRESSED) {
+	for (uint8_t i = 0; i < N_PADS; i++)
+	{
+		if (pads_midi[i].state == PAD_STATE_PRESSED)
+		{
 			pads_midi[i].state = PAD_STATE_RELEASED;
 			pads_states[i].unknown0 = 0;
 			pads_states[i].unknown1 = 0;
@@ -1024,7 +1142,8 @@ void rst_pads(void)
 			pads_states[i].cc = PAD_STATE_RELEASED;
 
 			if (pads_midi[i].cmd >> 4 == MIDI_CMD_NOTE_OFF_MSB &&
-			    pads_midi[i].data1 <= MIDI_MAX_DATA_VAL) {
+			    pads_midi[i].data1 <= MIDI_MAX_DATA_VAL)
+			{
 				// Write NOTE OFF for pad to midi buffer
 				write_midi_buffer(&(pads_midi[i].cmd_msb), 4);
 			}
@@ -1046,15 +1165,17 @@ void update_pad_leds()
 {
 	const mode_t selected_mode = *(uint8_t *)UINT8_SELECTED_MODE_0x2000003f; // uint8_t
 
-	mode_t *prev_mode = UINT8_PREV_MODE_0x20000031;			 // uint8_t
+	mode_t *prev_mode = UINT8_PREV_MODE_0x20000031;			   // uint8_t
 	pad_state_t *prev_pads_state = UINT8_8_PREV_PADS_STATE_0x20000033; // -> pad_state_t[N_PADS]
-	pad_states *pads_states = PAD_STATES_8_0x20000552;		 // -> pad_states[N_PADS]
+	pad_states *pads_states = PAD_STATES_8_0x20000552;		   // -> pad_states[N_PADS]
 
 	// For every Pad
-	for (uint8_t i = 0; i < N_PADS; i++) {
+	for (uint8_t i = 0; i < N_PADS; i++)
+	{
 		pad_state_t pad_state;
 
-		switch (selected_mode) {
+		switch (selected_mode)
+		{
 		case MODE_PAD:
 			pad_state = pads_states[i].pad;
 			break;
@@ -1065,7 +1186,8 @@ void update_pad_leds()
 			pad_state = pads_states[i].prog_chng;
 			break;
 		default:
-			for (uint8_t j = 0; j < N_PADS; j++) {
+			for (uint8_t j = 0; j < N_PADS; j++)
+			{
 				prev_pads_state[j] = PAD_STATE_UNSET;
 			}
 
@@ -1073,12 +1195,15 @@ void update_pad_leds()
 		}
 
 		// Only update pad LED if pad_state has changed or mode has changed
-		if (prev_pads_state[i] != pad_state && *prev_mode != selected_mode) {
+		if (prev_pads_state[i] != pad_state && *prev_mode != selected_mode)
+		{
 			prev_pads_state[i] = pad_state;
 			*prev_mode = selected_mode;
 
-			if (pad_state == PAD_STATE_PRESSED) {
-				switch (i) {
+			if (pad_state == PAD_STATE_PRESSED)
+			{
+				switch (i)
+				{
 				case 0:
 					LED_GPIO_PORT->ODR |= (1 << LED_PAD_1_GPIO);
 					break;
@@ -1106,8 +1231,11 @@ void update_pad_leds()
 				default:
 					break;
 				}
-			} else {
-				switch (i) {
+			}
+			else
+			{
+				switch (i)
+				{
 				case 0:
 					LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_1_GPIO);
 					break;
@@ -1159,18 +1287,20 @@ void update_leds(void)
 {
 	const uint8_t unknown_flag = *(uint8_t *)UINT8_UNKNOWN_FLAG_0x20000011; // uint8_t
 	const mode_t selected_mode = *(mode_t *)UINT8_SELECTED_MODE_0x2000003f; // uint8_t
-	const int unknown_enum = *(int *)UNKNOWN_ENUM_0x20000012;		      // unknown
+	const int unknown_enum = *(int *)UNKNOWN_ENUM_0x20000012;		// unknown
 
-	mode_t *prev_mode = UINT8_PREV_MODE_0x20000043;			 // -> uint8_t
-	uint8_t *selected_prog = UINT8_SELECTED_PROG_0x20000042;		 // -> uint8_t
+	mode_t *prev_mode = UINT8_PREV_MODE_0x20000043;			   // -> uint8_t
+	uint8_t *selected_prog = UINT8_SELECTED_PROG_0x20000042;	   // -> uint8_t
 	uint8_t *prev_selected_prog = UINT8_PREV_SELECTED_PROG_0x20000032; // -> uint8_t
-	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;			 // -> pad_midi[N_PADS]
-	pad_states *pads_states = PAD_STATES_8_0x20000552;		 // -> pad_states[N_PADS]
+	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;			   // -> pad_midi[N_PADS]
+	pad_states *pads_states = PAD_STATES_8_0x20000552;		   // -> pad_states[N_PADS]
 
 	// I have yet to find out what sets this flag != 0
-	if (unknown_flag == 0) {
+	if (unknown_flag == 0)
+	{
 		/* Check if mode has been switched */
-		if (*prev_mode != selected_mode) {
+		if (*prev_mode != selected_mode)
+		{
 			// Clear PB Pad LEDs
 			LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PAD_GPIO);
 			LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
@@ -1197,14 +1327,16 @@ void update_leds(void)
 			 * 	or
 			 * 	2. Change the MIDI logic to behave like the LED logic
 			 */
-			for (uint8_t i = 0; i < N_PADS; i++) {
+			for (uint8_t i = 0; i < N_PADS; i++)
+			{
 				pads_states[i].prog_chng = 0;
 			}
 			*prev_mode = selected_mode;
 		}
 
 		// Set LEDs according to selected mode
-		switch (selected_mode) {
+		switch (selected_mode)
+		{
 		case MODE_PAD:
 			LED_GPIO_PORT->ODR |= (1 << LED_PB_PAD_GPIO);
 			break;
@@ -1234,11 +1366,13 @@ void update_leds(void)
 			else if ((uint8_t *)PROG_4_SELECT_FLAG == 1)
 				*selected_prog = 4;
 
-			if (*prev_selected_prog != *selected_prog) {
+			if (*prev_selected_prog != *selected_prog)
+			{
 				rst_pads();
 
 				// Reset states of all pads
-				for (uint8_t i = 0; i < N_PADS; i++) {
+				for (uint8_t i = 0; i < N_PADS; i++)
+				{
 					pads_midi[i].state = PAD_STATE_RELEASED;
 					pads_states[i].unknown0 = 0;
 					pads_states[i].unknown1 = 0;
@@ -1248,7 +1382,8 @@ void update_leds(void)
 				}
 			}
 
-			switch (*selected_prog) {
+			switch (*selected_prog)
+			{
 			case 1:
 				LED_GPIO_PORT->ODR |= (1 << LED_PAD_1_GPIO);
 				break;
@@ -1270,7 +1405,9 @@ void update_leds(void)
 		}
 
 		update_pad_leds();
-	} else {
+	}
+	else
+	{
 		/* Clear all LEDs */
 		LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PAD_GPIO);
 		LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
@@ -1284,7 +1421,8 @@ void update_leds(void)
 		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_7_GPIO);
 		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_8_GPIO);
 
-		switch (unknown_enum) {
+		switch (unknown_enum)
+		{
 		case 1:
 			LED_GPIO_PORT->ODR |= (1 << LED_PB_PAD_GPIO);
 			break;
@@ -1362,9 +1500,12 @@ void main_loop()
 	FUN_08004ef0();
 	FUN_08005318();
 
-	while (true) {
-		while (true) {
-			while (true) {
+	while (true)
+	{
+		while (true)
+		{
+			while (true)
+			{
 				reload_IWDG();
 
 				if (*unknown_flag_0 == 0)
