@@ -788,9 +788,8 @@ void FUN_08003130(void)
 			pad_hd->down_cntr = 0x1e;
 		}
 
-		bool unknown_l_6 = (active == ACTIVE_UNKNOWN);
 		do {
-			if (unknown_l_6)
+			if (active == ACTIVE_UNKNOWN)
 				goto LAB_080033f6;
 
 			if (active != ACTIVE) {
@@ -798,16 +797,16 @@ void FUN_08003130(void)
 					bool mode_not_cc_pad = (sel_mode != MODE_CC && sel_mode != MODE_PAD);
 
 					if (sel_mode == MODE_PROG_CHNG) {
-						pads_states[i].unknown0 = 0;
+						pads_states[i].unknown0 = PAD_STATE_RELEASED;
 					} else if ((mode_not_cc_pad || sel_prog_settings->pads[i].type != TOGGLE)
 					           && pads_midi[i].state == PAD_STATE_PRESSED) {
 
-						if (pads_midi[i].data1 < 0x80) {
-							pads_states[i].prog_chng = 0;
+						if (pads_midi[i].data1 <= MIDI_MAX_DATA_VAL) {
+							pads_states[i].prog_chng = PAD_STATE_RELEASED;
 
-							if (sel_mode == 1)
-								pads_states[i].pad = 0;
-							else if (sel_mode == 2)
+							if (sel_mode == MODE_PAD)
+								pads_states[i].pad = PAD_STATE_RELEASED;
+							else if (sel_mode == MODE_CC)
 								pads_states[i].cc;
 
 							write_midi_buffer(&pads_midi[i].cmd_msb, 4); // TODO: Check if cmd_msb really is transfered
@@ -855,47 +854,39 @@ void FUN_08003130(void)
 		// unknown_l_5 = CONCAT12(data1,CONCAT11(midi_ch | (byte)(status_msb << 4),(char)status_msb));
 		// unknown_l_5 = CONCAT13(data2, (uint3)unknown_l_5);
 
-		uint32_t i5 = i * 5;
-		uint32_t *unknown_l_13 = pads_midi + 0x28 + i5;
+		pads_states[i].prog_chng = PAD_STATE_PRESSED;
 
-		uint8_t *unknown_l_14 = unknown_l_13 + 2;
-		uint8_t *unknown_l_15 = unknown_l_13 + 3;
-		uint8_t *unknown_l_16 = unknown_l_13 + 4;
-
-		*unknown_l_14 = 1;
-
-		if (pad_hd == 1) {
-			*unknown_l_15 = 1;
-		} else if (pad_hd == 2) {
-			*unknown_l_16 = 1;
-		}
+		if (pad_hd == 1)
+			pads_states[i].pad = PAD_STATE_PRESSED;
+		else if (pad_hd == 2)
+			pads_states[i].cc = PAD_STATE_PRESSED;
 
 		if (((pad_hd == 2) || (pad_hd == 1)) &&
 		    (*(uint8_t *)(sel_prog_settings->pads[i].type) == 1)) {
 			if (pad_hd == (char *)0x1) {
 				sp_i4 = &pads_midi + 0x28;
-				bool *b1 = sp_i4 + i5;
-				uint8_t v1 = *(uint8_t *)(pads_midi + 0x28 + i5);
+				bool *b1 = sp_i4 + i*5;
+				uint8_t v1 = *(uint8_t *)(pads_midi + 0x28 + i*5);
 				*b1 = v1 == 0;
-				unknown_l_17 = *(uint8_t *)(sp_i4 + i5);
+				unknown_l_17 = *(uint8_t *)(sp_i4 + i*5);
 				if (unknown_l_17 == 0) {
 					// local_28 = CONCAT13(data2_off,CONCAT12(data1,CONCAT11(midi_ch,8))) | 0x8000;
 				}
 			}
 		} else {
-			bool *b1 = unknown_l_13 + 1;
-			uint8_t v1 = *(uint8_t *)(unknown_l_13 + 1);
+			bool *b1 = pad_states + 1;
+			uint8_t v1 = *(uint8_t *)(pad_states + 1);
 			*b1 = v1 == 0;
-			unknown_l_17 = *(uint8_t *)(unknown_l_13 + 1);
+			unknown_l_17 = *(uint8_t *)(pad_states + 1);
 			if (unknown_l_17 == 0) {
 				// local_28 = (uint)(uint3)local_28;
 			}
 		}
 
 		if (unknown_l_17 == 0) {
-			uint8_t *p1 = unknown_l_13 + 2;
-			uint8_t *p2 = unknown_l_13 + 3;
-			uint8_t *p3 = unknown_l_13 + 4;
+			uint8_t *p1 = pad_states + 2;
+			uint8_t *p2 = pad_states + 3;
+			uint8_t *p3 = pad_states + 4;
 
 			*p1 = 0;
 			if (pad_hd == 1) {
@@ -906,16 +897,16 @@ void FUN_08003130(void)
 		}
 
 		if (status_msb == 9) {
-			*(uint8_t *)(i5 + &pads_midi + 1) = 8;
-			*(uint8_t *)(i5 + &pads_midi + 2) = midi_ch | 0x80;
+			*(uint8_t *)(i*5 + &pads_midi + 1) = 8;
+			*(uint8_t *)(i*5 + &pads_midi + 2) = midi_ch | 0x80;
 		} else {
-			*(uint8_t *)(i5 + &pads_midi + 1) = (uint8_t)status_msb;
-			// *(uint8_t *)(i5 + &pads_midi + 2) = unknown_l_5._1_1_;
+			*(uint8_t *)(i*5 + &pads_midi + 1) = (uint8_t)status_msb;
+			// *(uint8_t *)(i*5 + &pads_midi + 2) = unknown_l_5._1_1_;
 		}
 
-		*(uint8_t *)(i5 + &pads_midi + 3) = data1;
-		*(uint8_t *)(i5 + &pads_midi + 4) = data2_off;
-		*(uint8_t *)(&pads_midi + i5) = 1;
+		*(uint8_t *)(i*5 + &pads_midi + 3) = data1;
+		*(uint8_t *)(i*5 + &pads_midi + 4) = data2_off;
+		*(uint8_t *)(&pads_midi + i*5) = 1;
 
 		if (data1 < 0x80) {
 			// write_midi_buffer(&local_28,4);
