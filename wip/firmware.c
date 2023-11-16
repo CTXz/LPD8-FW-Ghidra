@@ -950,23 +950,16 @@ void FUN_08003130(void)
 			continue;
 		}
 
-		break;
-
 		// unknown_l_5 = CONCAT12(data1,CONCAT11(midi_ch | (byte)(status_msb << 4),(char)status_msb));
 		// unknown_l_5 = CONCAT13(data2_press, (uint3)unknown_l_5);
 
 		states->prog_chng = PAD_STATE_PRESSED;
 
 		if (sel_mode == MODE_PAD)
-			states->pad = PAD_STATE_PRESSED;
-		else if (sel_mode == MODE_CC)
-			states->cc = PAD_STATE_PRESSED;
-
-		bool is_cc_pad = (sel_mode == MODE_CC) || (sel_mode == MODE_PAD);
-		if (is_cc_pad && settings->type == TOGGLE)
 		{
+			states->pad = PAD_STATE_PRESSED;
 
-			if (sel_mode == MODE_PAD)
+			if (settings->type == TOGGLE)
 			{
 
 				states->unknown0 = (states->unknown0 == PAD_STATE_RELEASED)
@@ -981,16 +974,22 @@ void FUN_08003130(void)
 				}
 			}
 		}
-		else
+		else if (sel_mode == MODE_CC)
 		{
-			states->unknown1 = (states->unknown1 == PAD_STATE_RELEASED)
-					       ? PAD_STATE_PRESSED
-					       : PAD_STATE_RELEASED;
+			states->cc = PAD_STATE_PRESSED;
 
-			unknown_l_17 = states->unknown1;
-			if (unknown_l_17 == PAD_STATE_RELEASED)
+			if (settings->type == TOGGLE)
 			{
-				// local_28 = (uint)(uint3)local_28;
+				states->unknown1 = (states->unknown1 == PAD_STATE_RELEASED)
+						       ? PAD_STATE_PRESSED
+						       : PAD_STATE_RELEASED;
+
+				unknown_l_17 = states->unknown1;
+
+				if (unknown_l_17 == PAD_STATE_RELEASED)
+				{
+					// local_28 = (uint)(uint3)local_28;
+				}
 			}
 		}
 
