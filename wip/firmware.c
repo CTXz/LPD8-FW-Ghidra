@@ -715,7 +715,7 @@ void FUN_08003130(void)
 
 	uint8_t data2 = 0;
 	uint8_t data2_off = 0;
-	uint32_t status_msb = 0;
+	uint8_t status_msb = 0;
 	uint8_t data1 = 0;
 
 	uint8_t *ready = UINT8_UNKNOWN_READY_0x20000041;
@@ -835,17 +835,17 @@ void FUN_08003130(void)
 
 			if (sel_mode == MODE_PAD) {
 				data2_off = MIDI_MAX_DATA_VAL;
-				status_msb = 9;
+				status_msb = 0x09;
 				data1 = sel_prog_settings->pads[i].note;
 				data2 = midi_vel;
 			} else if (sel_mode == MODE_CC) {
 				data2_off = 0;
-				status_msb = 0xb;
+				status_msb = 0x0b;
 				data1 = sel_prog_settings->pads[i].cc;
 				data2 = midi_vel;
 			} else if (sel_mode == MODE_PROG_CHNG) {
 				data2_off = 0;
-				status_msb = 0xc;
+				status_msb = 0x0c;
 				data1 = sel_prog_settings->pads[i].pc;
 				data2 = 0;
 			}
@@ -856,59 +856,58 @@ void FUN_08003130(void)
 
 		pads_states[i].prog_chng = PAD_STATE_PRESSED;
 
-		if (pad_hd == 1)
+		if (sel_mode == MODE_PAD)
 			pads_states[i].pad = PAD_STATE_PRESSED;
-		else if (pad_hd == 2)
+		else if (sel_mode == MODE_CC)
 			pads_states[i].cc = PAD_STATE_PRESSED;
 
-		if (((pad_hd == 2) || (pad_hd == 1)) &&
-		    (*(uint8_t *)(sel_prog_settings->pads[i].type) == 1)) {
-			if (pad_hd == (char *)0x1) {
-				sp_i4 = &pads_midi + 0x28;
-				bool *b1 = sp_i4 + i*5;
-				uint8_t v1 = *(uint8_t *)(pads_midi + 0x28 + i*5);
-				*b1 = v1 == 0;
-				unknown_l_17 = *(uint8_t *)(sp_i4 + i*5);
-				if (unknown_l_17 == 0) {
+		bool is_cc_pad = (sel_mode == MODE_CC) || (sel_mode == MODE_PAD);
+		if (is_cc_pad && sel_prog_settings->pads[i].type == TOGGLE) {
+
+			if (sel_mode == MODE_PAD) {
+
+				pads_states[i].unknown0  = (pads_states[i].unknown0 == PAD_STATE_RELEASED)
+				                           ? PAD_STATE_PRESSED : PAD_STATE_RELEASED;
+
+				unknown_l_17 = pads_states[i].unknown0;
+
+				if (unknown_l_17 == PAD_STATE_RELEASED) {
 					// local_28 = CONCAT13(data2_off,CONCAT12(data1,CONCAT11(midi_ch,8))) | 0x8000;
 				}
 			}
 		} else {
-			bool *b1 = pad_states + 1;
-			uint8_t v1 = *(uint8_t *)(pad_states + 1);
-			*b1 = v1 == 0;
-			unknown_l_17 = *(uint8_t *)(pad_states + 1);
-			if (unknown_l_17 == 0) {
+			pads_states[i].unknown1 = (pads_states[i].unknown1 == PAD_STATE_RELEASED)
+			                          ? PAD_STATE_PRESSED : PAD_STATE_RELEASED;
+
+			unknown_l_17 = pads_states[i].unknown1;
+			if (unknown_l_17 == PAD_STATE_RELEASED) {
 				// local_28 = (uint)(uint3)local_28;
 			}
 		}
 
-		if (unknown_l_17 == 0) {
-			uint8_t *p1 = pad_states + 2;
-			uint8_t *p2 = pad_states + 3;
-			uint8_t *p3 = pad_states + 4;
+		if (unknown_l_17 == PAD_STATE_RELEASED) {
+			pads_states[i].prog_chng = PAD_STATE_RELEASED;
 
-			*p1 = 0;
-			if (pad_hd == 1) {
-				*p2 = 0;
-			} else if (pad_hd == 2) {
-				*p3 = 0;
-			}
+			if (sel_mode == MODE_PAD)
+				pads_states[i].pad = PAD_STATE_RELEASED;
+			else if (sel_mode == MODE_CC)
+				pads_states[i].cc = PAD_STATE_RELEASED;
 		}
 
-		if (status_msb == 9) {
-			*(uint8_t *)(i*5 + &pads_midi + 1) = 8;
-			*(uint8_t *)(i*5 + &pads_midi + 2) = midi_ch | 0x80;
+		if (status_msb == MIDI_CMD_NOTE_ON_MSB) {
+			pads_midi[i].cmd_msb = MIDI_CMD_NOTE_OFF_MSB;
+			pads_midi[i].cmd = midi_ch | (MIDI_CMD_NOTE_OFF_MSB << 4);
 		} else {
-			*(uint8_t *)(i*5 + &pads_midi + 1) = (uint8_t)status_msb;
 			// *(uint8_t *)(i*5 + &pads_midi + 2) = unknown_l_5._1_1_;
+			pads_midi[i].cmd_msb = status_msb;
+			pads_midi[i].cmd = midi_ch | (status_msb << 4); // TODO: Confirm
 		}
 
-		*(uint8_t *)(i*5 + &pads_midi + 3) = data1;
-		*(uint8_t *)(i*5 + &pads_midi + 4) = data2_off;
-		*(uint8_t *)(&pads_midi + i*5) = 1;
+		pads_midi[i].state = PAD_STATE_PRESSED;
+		pads_midi[i].data1 = data1;
+		pads_midi[i].data2 = data2_off;
 
-		if (data1 < 0x80) {
+		if (data1 <= MIDI_MAX_DATA_VAL) {
 			// write_midi_buffer(&local_28,4);
 		}
 LAB_080033f6:
