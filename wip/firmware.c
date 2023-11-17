@@ -92,8 +92,8 @@
 #define MAX_ADC_PAD_VAL 0x2A0
 #define PAD_ADC_CONSIDERED_RELEASED 64
 #define PAD_ADC_CONSIDERED_PRESSED MIDI_MAX_DATA_VAL + 2
-#define PAD_UP_COUNT_COMPLETE 4
-#define PAD_DOWN_COUNT_START 30
+#define PAD_PRESS_INCR_COMPLETE 4
+#define PAD_RELEASE_DECR_START 30
 #define PAD_MODE_RELEASE_DATA2 MIDI_MAX_DATA_VAL
 #define CC_MODE_RELEASE_DATA2 0x00
 #define PROG_CHNG_MODE_RELEASE_DATA2 0x00
@@ -184,8 +184,8 @@ typedef struct
 typedef struct
 {
 	pad_confirmed_t confirmed_state;
-	uint8_t up_cntr;
-	uint8_t down_cntr;
+	uint8_t press_incr;
+	uint8_t rel_decr;
 	uint8_t unknown0;
 	uint16_t adc_eval;
 } pad_handling_data;
@@ -570,6 +570,7 @@ void write_midi_buffer(void *data, uint32_t size)
  * Progress: ALMOST DONE / AWAITING MORE INFO
  * TODO: Confirm purpose of ready flag,
  * 	 Understand addition of 1 to range
+ * 	 Confirm write_mid output
  */
 void eval_knobs(void)
 {
@@ -749,11 +750,6 @@ void FUN_08003130(void)
 	unknown unknown_l_5;
 	uint8_t unknown_l_17;
 
-	uint8_t status_msb = 0;
-	uint8_t data1 = 0;
-	uint8_t data2_press = 0;
-	uint8_t data2_release = 0;
-
 	uint8_t *ready = UINT8_UNKNOWN_READY_0x20000041;
 	pad_midi *pads_midi = PAD_MIDI_8_0x2000052a;
 	uint8_t *all_prog_settings = PROGRAM_SETTINGS_5_0x200003CC;
@@ -761,6 +757,11 @@ void FUN_08003130(void)
 	pad_states *pads_states = PAD_STATES_8_0x20000552;
 	pad_handling_data *pads_hd = PAD_HANDLING_DATA_8_0x200004FA;
 	adc_val_t *pad_adc_vals = UINT16_8_PAD_ADC_VALS_0x200005AA;
+
+	uint8_t status_msbyte = 0;
+	uint8_t data1 = 0;
+	uint8_t data2_press = 0;
+	uint8_t data2_release = 0;
 
 	if (*ready != READY)
 		return;
@@ -772,7 +773,7 @@ void FUN_08003130(void)
 	if (midi_ch > MIDI_MAX_CHANNEL)
 		midi_ch = 0;
 
-	// unknown_l_5 = in_r3;
+	// msg = in_r3; TODO Inspect
 	for (uint8_t i = 0; i < N_PADS; i++)
 	{
 
@@ -783,42 +784,46 @@ void FUN_08003130(void)
 		pad_settings *settings = &sel_prog_settings->pads[i];
 		pad_midi *midi = &pads_midi[i];
 
-		if (pad_hd->confirmed_state == CONFIRMED_PRESSED)
+		switch (pad_hd->confirmed_state)
 		{
+		case CONFIRMED_PRESSED:
+
 			if (pad_adc_val <= PAD_ADC_CONSIDERED_RELEASED)
 			{
 
-				if (pad_hd->down_cntr == 0)
+				if (pad_hd->rel_decr == 0)
 				{
 					pad_hd->confirmed_state = CONFIRMED_RELEASED;
 					confirmed_state = CONFIRMED_RELEASED;
 				}
 				else
 				{
-					pad_hd->down_cntr -= 1;
+					pad_hd->rel_decr--;
 				}
 
 				pad_hd->adc_eval = 0;
-				pad_hd->up_cntr = 0;
+				pad_hd->press_incr = 0;
 			}
 			else
 			{
-				pad_hd->down_cntr = PAD_DOWN_COUNT_START;
+				pad_hd->rel_decr = PAD_RELEASE_DECR_START;
 			}
-		}
-		else if (pad_hd->confirmed_state == CONFIRMED_RELEASED &&
-			 pad_adc_val >= PAD_ADC_CONSIDERED_PRESSED)
-		{
+			break;
 
-			if (pad_hd->up_cntr == 0 ||
+		case CONFIRMED_RELEASED:
+
+			if (pad_adc_val < PAD_ADC_CONSIDERED_PRESSED)
+				break;
+
+			if (pad_hd->press_incr == 0 ||
 			    pad_hd->adc_eval < pad_adc_val)
 			{
 				pad_hd->adc_eval = pad_adc_val;
 			}
 
-			if (pad_hd->up_cntr < PAD_UP_COUNT_COMPLETE)
+			if (pad_hd->press_incr < PAD_PRESS_INCR_COMPLETE)
 			{
-				pad_hd->up_cntr += 1;
+				pad_hd->press_incr++;
 			}
 			else
 			{
@@ -828,19 +833,19 @@ void FUN_08003130(void)
 				if (pad_hd->adc_eval > MAX_ADC_PAD_VAL)
 					pad_hd->adc_eval = MAX_ADC_PAD_VAL;
 
-				/* Scale ADC value to MIDI range (0x00 - 0x7F)
+				/* Scale ADC value to MIDI range (0 - 127)
 				 * Scaling is done with the following formula:
 				 * 	scaled = ((a - (mm + 1)) / (ma - mm)) * mm
 				 * Where:
-				 * 	- mm is the maximum MIDI data value (0x7F)
-				 * 	- ma is the maximum allowed/possible ADC value (0x2A0)
+				 * 	- mm is the maximum MIDI data value (127)
+				 * 	- ma is the maximum allowed/possible ADC value (672)
 				 * 		- Note that the lower limit is set by
 				 * 		  PAD_ADC_CONSIDERED_PRESSED, which is
 				 * 		  mm + 2. This prevents a underflow.
 				 * 	- a is the maximum recorded ADC value (caps at ma)
 				 *
 				 * (a - mm + 1) / (ma - mm) is the percentage, which is then
-				 * multiplied by mm to get the scaled MIDI value (0x00 - 0x7F)
+				 * multiplied by mm to get the scaled MIDI value (0 - 127)
 				 *
 				 * To avoid the need for floating point arithmetic, the formula
 				 * has rewritten to:
@@ -855,175 +860,191 @@ void FUN_08003130(void)
 				const uint16_t den = MAX_ADC_PAD_VAL - MIDI_MAX_DATA_VAL;
 				pad_hd->adc_eval = num / den;
 			}
-		}
-		else
-		{
+			break;
+
+		default:
 			// TODO: Research if it is even possible to enter this branch
 			pad_hd->adc_eval = 0;
-			pad_hd->up_cntr = 0;
-			pad_hd->down_cntr = PAD_DOWN_COUNT_START;
+			pad_hd->press_incr = 0;
+			pad_hd->rel_decr = PAD_RELEASE_DECR_START;
 		}
 
-		// Porbably redudant as it is most likely only true if confirmed_state == UNCONFIRMED
-		bool not_p_r = (confirmed_state != CONFIRMED_PRESSED &&
-				confirmed_state != CONFIRMED_RELEASED);
-
-		if (confirmed_state == UNCONFIRMED || not_p_r)
-			continue;
-
-		if (confirmed_state == CONFIRMED_RELEASED)
+		switch (confirmed_state)
 		{
-			bool mode_not_cc_pad = (sel_mode != MODE_CC && sel_mode != MODE_PAD);
+		case CONFIRMED_RELEASED:
 
 			if (sel_mode == MODE_PROG_CHNG)
 			{
 				states->unknown0 = PAD_STATE_RELEASED;
+				break;
 			}
-			else if ((mode_not_cc_pad || settings->type != TOGGLE) &&
-				 midi->state == PAD_STATE_PRESSED)
-			{
 
-				midi->state = PAD_STATE_RELEASED;
+			if (midi->state != PAD_STATE_PRESSED)
+				break;
+
+			bool is_momentary = settings->type != TOGGLE;
+			bool is_prog = (sel_mode != MODE_CC && sel_mode != MODE_PAD);
+
+			/* is_prog can only be true if user releases pad in PROG mode
+			 * after switching from CC or PAD mode while holding the pad.
+			 * If the pad is only pressed in PROG mode, midi->state will never
+			 * be PAD_STATE_PRESSED.
+			 *
+			 * I speculate this is a fallback feature to ensure the NOTE or
+			 * CC message has been terminated before changing the program.
+			 *
+			 * Pulling off this trick without changing the program and
+			 * and returning back to the prior mode can result in duplicate
+			 * MIDI messages being sent. This can be achieved with all modes,
+			 * including PROG_CHNG.
+			 */
+
+			if (is_momentary || is_prog)
+			{
+				midi->state = PAD_STATE_RELEASED; // TODO: Use initiated/terminated?
 
 				if (midi->data1 <= MIDI_MAX_DATA_VAL)
 				{
-					states->prog_chng = PAD_STATE_RELEASED;
+					states->prog_chng = PAD_STATE_RELEASED; // TODO: Use Active/Inactive?
 
 					if (sel_mode == MODE_PAD)
 						states->pad = PAD_STATE_RELEASED;
 					else if (sel_mode == MODE_CC)
-						states->cc;
+						states->cc = PAD_STATE_RELEASED;
 
 					write_midi_buffer(&midi->cmd_msb, 4); // TODO: Check if cmd_msb really is transfered
 				}
 			}
 
-			continue;
-		}
+			break;
 
-		// Confirmed Pressed
+		case CONFIRMED_PRESSED:
 
-		uint32_t _midi_vel;
+			uint32_t _pressure_midi;
 
-		if (pad_hd->adc_eval <= MIDI_MAX_DATA_VAL)
-			_midi_vel = pad_hd->adc_eval;
-		else
-			_midi_vel = MIDI_MAX_DATA_VAL;
+			if (pad_hd->adc_eval <= MIDI_MAX_DATA_VAL)
+				_pressure_midi = pad_hd->adc_eval;
+			else
+				_pressure_midi = MIDI_MAX_DATA_VAL;
 
-		/*
-		 * Redundt as guards above and below already ensure this
-		 * Maybe this was intended for a conversion to a non-linear scale?
-		 * Kept for authenticity sake
-		 */
-		uint8_t midi_vel = plus_1_max_127[_midi_vel];
+			/*
+			 * Redundant as guards above and below already ensure this
+			 * Maybe this was intended for a conversion to a non-linear scale?
+			 * Kept for authenticity sake
+			 */
+			midi_data_t pressure_midi = plus_1_max_127[_pressure_midi];
 
-		if (midi_vel == 0) // Should never happen due to line above...
-			midi_vel = 1;
-		else if (midi_vel > MIDI_MAX_DATA_VAL) // Again redundant...
-			midi_vel = MIDI_MAX_DATA_VAL;
+			if (pressure_midi == 0) // Should never happen due to line above...
+				pressure_midi = 1;
+			else if (pressure_midi > MIDI_MAX_DATA_VAL) // Again redundant...
+				pressure_midi = MIDI_MAX_DATA_VAL;
 
-		// Prepare MIDI message
+			// Prepare MIDI message
 
-		if (sel_mode == MODE_PAD)
-		{
-			status_msb = MIDI_CMD_NOTE_ON_MSB;
-			data1 = settings->note;
-			data2_press = midi_vel;
-			data2_release = PAD_MODE_RELEASE_DATA2;
-		}
-		else if (sel_mode == MODE_CC)
-		{
-			status_msb = MIDI_CMD_CC_MSB;
-			data1 = settings->cc;
-			data2_press = midi_vel;
-			data2_release = CC_MODE_RELEASE_DATA2;
-		}
-		else if (sel_mode == MODE_PROG_CHNG)
-		{
-			status_msb = MIDI_CMD_PROG_CHNG_MSB;
-			data1 = settings->pc;
-			data2_press = PROG_CHNG_MODE_PRESS_DATA2;
-			data2_release = PROG_CHNG_MODE_RELEASE_DATA2;
-		}
-		else if (sel_mode == MODE_PROG)
-		{
-			continue;
-		}
-
-		// unknown_l_5 = CONCAT12(data1,CONCAT11(midi_ch | (byte)(status_msb << 4),(char)status_msb));
-		// unknown_l_5 = CONCAT13(data2_press, (uint3)unknown_l_5);
-
-		states->prog_chng = PAD_STATE_PRESSED;
-
-		if (sel_mode == MODE_PAD)
-		{
-			states->pad = PAD_STATE_PRESSED;
-
-			if (settings->type == TOGGLE)
+			switch (sel_mode)
 			{
-
-				states->unknown0 = (states->unknown0 == PAD_STATE_RELEASED)
-						       ? PAD_STATE_PRESSED
-						       : PAD_STATE_RELEASED;
-
-				unknown_l_17 = states->unknown0;
-
-				if (unknown_l_17 == PAD_STATE_RELEASED)
-				{
-					// local_28 = CONCAT13(data2_release,CONCAT12(data1,CONCAT11(midi_ch,8))) | 0x8000;
-				}
+			case MODE_PAD:
+				status_msbyte = MIDI_CMD_NOTE_ON_MSB;
+				data1 = settings->note;
+				data2_press = pressure_midi;
+				data2_release = PAD_MODE_RELEASE_DATA2;
+			case MODE_CC:
+				status_msbyte = MIDI_CMD_CC_MSB;
+				data1 = settings->cc;
+				data2_press = pressure_midi;
+				data2_release = CC_MODE_RELEASE_DATA2;
+			case MODE_PROG_CHNG:
+				status_msbyte = MIDI_CMD_PROG_CHNG_MSB;
+				data1 = settings->pc;
+				data2_press = PROG_CHNG_MODE_PRESS_DATA2;
+				data2_release = PROG_CHNG_MODE_RELEASE_DATA2;
+			case MODE_PROG:
+				continue;
 			}
-		}
-		else if (sel_mode == MODE_CC)
-		{
-			states->cc = PAD_STATE_PRESSED;
 
-			if (settings->type == TOGGLE)
-			{
-				states->unknown1 = (states->unknown1 == PAD_STATE_RELEASED)
-						       ? PAD_STATE_PRESSED
-						       : PAD_STATE_RELEASED;
+			uint8_t msg[4] = {status_msbyte,
+					  (status_msbyte << 4) | midi_ch,
+					  data1,
+					  data2_press};
 
-				unknown_l_17 = states->unknown1;
-
-				if (unknown_l_17 == PAD_STATE_RELEASED)
-				{
-					// local_28 = (uint)(uint3)local_28;
-				}
-			}
-		}
-
-		if (unknown_l_17 == PAD_STATE_RELEASED)
-		{
-			states->prog_chng = PAD_STATE_RELEASED;
+			states->prog_chng = PAD_STATE_PRESSED;
 
 			if (sel_mode == MODE_PAD)
-				states->pad = PAD_STATE_RELEASED;
+			{
+				states->pad = PAD_STATE_PRESSED;
+
+				if (settings->type == TOGGLE)
+				{
+					states->unknown0 = (states->unknown0 == PAD_STATE_RELEASED)
+							       ? PAD_STATE_PRESSED
+							       : PAD_STATE_RELEASED;
+
+					unknown_l_17 = states->unknown0;
+
+					if (unknown_l_17 == PAD_STATE_RELEASED)
+					{
+						msg[0] = MIDI_CMD_NOTE_OFF_MSB;
+						msg[1] = (MIDI_CMD_NOTE_OFF_MSB << 4) | midi_ch;
+						msg[2] = data1;
+						msg[3] = data2_release;
+					}
+				}
+			}
 			else if (sel_mode == MODE_CC)
-				states->cc = PAD_STATE_RELEASED;
-		}
+			{
+				states->cc = PAD_STATE_PRESSED;
 
-		if (status_msb == MIDI_CMD_NOTE_ON_MSB)
-		{
-			midi->cmd_msb = MIDI_CMD_NOTE_OFF_MSB;
-			midi->cmd = midi_ch | (MIDI_CMD_NOTE_OFF_MSB << 4);
-		}
-		else
-		{
-			// *(uint8_t *)(i*5 + &pads_midi + 2) = unknown_l_5._1_1_;
-			midi->cmd_msb = status_msb;
-			midi->cmd = midi_ch | (status_msb << 4); // TODO: Confirm
-		}
+				if (settings->type == TOGGLE)
+				{
+					states->unknown1 = (states->unknown1 == PAD_STATE_RELEASED)
+							       ? PAD_STATE_PRESSED
+							       : PAD_STATE_RELEASED;
 
-		midi->state = PAD_STATE_PRESSED;
-		midi->data1 = data1;
-		midi->data2 = data2_release;
+					unknown_l_17 = states->unknown1;
 
-		if (data1 <= MIDI_MAX_DATA_VAL)
-		{
-			// write_midi_buffer(&local_28,4);
+					if (unknown_l_17 == PAD_STATE_RELEASED)
+					{
+						/* Likely used to be data2_release but was probably
+						 * optimized away since data2_release is always 0x00 */
+						msg[3] = CC_MODE_RELEASE_DATA2;
+					}
+				}
+			}
+
+			if (unknown_l_17 == PAD_STATE_RELEASED)
+			{
+				states->prog_chng = PAD_STATE_RELEASED;
+
+				if (sel_mode == MODE_PAD)
+					states->pad = PAD_STATE_RELEASED;
+				else if (sel_mode == MODE_CC)
+					states->cc = PAD_STATE_RELEASED;
+			}
+
+			if (status_msbyte == MIDI_CMD_NOTE_ON_MSB)
+			{
+				midi->cmd_msb = MIDI_CMD_NOTE_OFF_MSB;
+				midi->cmd = midi_ch | (MIDI_CMD_NOTE_OFF_MSB << 4);
+			}
+			else
+			{
+				midi->cmd_msb = status_msbyte;
+				midi->cmd = msg[1];
+			}
+
+			midi->state = PAD_STATE_PRESSED;
+			midi->data1 = data1;
+			midi->data2 = data2_release;
+
+			if (data1 <= MIDI_MAX_DATA_VAL)
+				write_midi_buffer(msg, sizeof(msg));
+
+			break;
+
+		case UNCONFIRMED:
+		default:
+			break;
 		}
-	next_pad:
 	}
 }
 
