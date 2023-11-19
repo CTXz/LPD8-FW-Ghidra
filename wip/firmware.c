@@ -145,7 +145,7 @@ typedef uint8_t ready_t;
 typedef uint8_t pad_confirmed_t;
 #define CONFIRMED_RELEASED 0x0
 #define CONFIRMED_PRESSED 0x1
-#define UNCONFIRMED 0x2
+#define UNCHANGED 0x2
 
 typedef uint8_t pad_toggled_t;
 #define TOGGLED_OFF 0x0
@@ -191,7 +191,7 @@ typedef struct
 
 typedef struct
 {
-	pad_confirmed_t confirmed_state;
+	pad_confirmed_t last_confirmed_state;
 	uint8_t press_incr;
 	uint8_t rel_decr;
 	uint8_t unknown0;
@@ -747,15 +747,15 @@ void eval_knobs(void)
 
 /**
  * @ 0x08003130
- * Progress: INCOMPLETE
+ * Progress: ALMOST DONE / AWAITING MORE INFO
+ * TODO: Confirm ready flag,
+ * 	 Confirm if midi output actually transmitts the MSB
  */
-void FUN_08003130(void)
+void eval_pads(void)
 {
 	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_0x20000042;
 	const uint8_t *plus_1_max_127 = CONST_UINT8_127_LUT_1TO127_080056E4;
 	const mode_t sel_mode = *(uint8_t *)UINT8_SELECTED_MODE_0x2000003f;
-
-	bool toggled;
 
 	uint8_t *ready = UINT8_UNKNOWN_READY_0x20000041;
 	pending_midi *pads_on_release_midi = PENDING_MIDI_8_RELEASE_MIDI_0x2000052a;
@@ -784,14 +784,14 @@ void FUN_08003130(void)
 	for (uint8_t i = 0; i < N_PADS; i++)
 	{
 
-		uint8_t confirmed_state = UNCONFIRMED;
 		pad_handling_data *pad_hd = &pads_hd[i];
 		adc_val_t pad_adc_val = pad_adc_vals[i];
 		pad_states *states = &pads_states[i];
 		pad_settings *settings = &sel_prog_settings->pads[i];
 		pending_midi *on_release_midi = &pads_on_release_midi[i];
 
-		switch (pad_hd->confirmed_state)
+		pad_confirmed_t changed = UNCHANGED;
+		switch (pad_hd->last_confirmed_state)
 		{
 		case CONFIRMED_PRESSED:
 
@@ -800,8 +800,8 @@ void FUN_08003130(void)
 
 				if (pad_hd->rel_decr == 0)
 				{
-					pad_hd->confirmed_state = CONFIRMED_RELEASED;
-					confirmed_state = CONFIRMED_RELEASED;
+					pad_hd->last_confirmed_state = CONFIRMED_RELEASED;
+					changed = CONFIRMED_RELEASED;
 				}
 				else
 				{
@@ -834,8 +834,8 @@ void FUN_08003130(void)
 			}
 			else
 			{
-				pad_hd->confirmed_state = CONFIRMED_PRESSED;
-				confirmed_state = CONFIRMED_PRESSED;
+				pad_hd->last_confirmed_state = CONFIRMED_PRESSED;
+				changed = CONFIRMED_PRESSED;
 
 				if (pad_hd->adc_eval > MAX_ADC_PAD_VAL)
 					pad_hd->adc_eval = MAX_ADC_PAD_VAL;
@@ -861,7 +861,6 @@ void FUN_08003130(void)
 				 * better precision when dividing by (ma - mm) without the need for
 				 * floating point arithmetic.
 				 *
-				 * TODO: Check what happens if adc_eval == 0
 				 */
 				const uint32_t num = (pad_hd->adc_eval - (MIDI_MAX_DATA_VAL + 1)) * MIDI_MAX_DATA_VAL;
 				const uint16_t den = MAX_ADC_PAD_VAL - MIDI_MAX_DATA_VAL;
@@ -876,7 +875,7 @@ void FUN_08003130(void)
 			pad_hd->rel_decr = PAD_RELEASE_DECR_START;
 		}
 
-		switch (confirmed_state)
+		switch (changed)
 		{
 		case CONFIRMED_RELEASED:
 
@@ -889,7 +888,7 @@ void FUN_08003130(void)
 			if (on_release_midi->pending != PENDING)
 				break;
 
-			bool is_momentary = settings->type != TOGGLE;
+			bool is_momentary = settings->type != TOGGLE; // Toggle terminates on push
 			bool is_prog = (sel_mode != MODE_CC && sel_mode != MODE_PAD);
 
 			/* is_prog can only be true if user releases pad in PROG mode
@@ -908,11 +907,11 @@ void FUN_08003130(void)
 
 			if (is_momentary || is_prog)
 			{
-				on_release_midi->pending = NOT_PENDING; // TODO: Use initiated/terminated?
+				on_release_midi->pending = NOT_PENDING;
 
 				if (on_release_midi->data1 <= MIDI_MAX_DATA_VAL)
 				{
-					states->prog_chng = PAD_STATE_RELEASED; // TODO: Use Active/Inactive?
+					states->prog_chng = PAD_STATE_RELEASED;
 
 					if (sel_mode == MODE_PAD)
 						states->pad = PAD_STATE_RELEASED;
@@ -1041,7 +1040,7 @@ void FUN_08003130(void)
 
 			break;
 
-		case UNCONFIRMED:
+		case UNCHANGED:
 		default:
 			break;
 		}
@@ -1547,7 +1546,7 @@ void main_loop()
 
 			FUN_080023fc();
 			eval_knobs();
-			FUN_08003130();
+			eval_pads();
 			read_mode_pbs();
 			eval_mode_pbs();
 			update_leds();
