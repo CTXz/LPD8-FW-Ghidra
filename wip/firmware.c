@@ -375,6 +375,113 @@ void DMA_set_DIR_CIRC_PINC_MINC_PSIZE_MSIZE_PL_MEM2MEM_CNDTR_CPAR_CMAR(
 }
 
 /**
+ * @ 0x08002d94
+ */
+
+// void FUN_08002d94(uint *dma_ccr)
+// {
+// 	int offset;
+
+// 	*dma_ccr = *dma_ccr & 0xfffffffe;
+// 	*dma_ccr = 0;
+// 	dma_ccr[1] = 0;
+// 	dma_ccr[2] = 0;
+// 	dma_ccr[3] = 0;
+// 	offset = (int)dma_ccr - (int)DMA1_CCR7_ptr;
+// 	if (dma_ccr == DMA1_CCR7_ptr)
+// 	{
+// 		DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf000000;
+// 		return;
+// 	}
+// 	if (dma_ccr != DMA1_CCR7_ptr && (int)DMA1_CCR7_ptr <= (int)dma_ccr)
+// 	{
+// 		if (offset == 0x3b0)
+// 		{
+// 			DMA1_CCR7_ptr[0xe1] = DMA1_CCR7_ptr[0xe1] | 0xf00;
+// 			return;
+// 		}
+// 		if (offset < 0x3b1)
+// 		{
+// 			if (offset == 0x388)
+// 			{
+// 				DMA1_CCR7_ptr[0xe1] = DMA1_CCR7_ptr[0xe1] | 0xf;
+// 				return;
+// 			}
+// 			if (offset != 0x39c)
+// 			{
+// 				return;
+// 			}
+// 			DMA1_CCR7_ptr[0xe1] = DMA1_CCR7_ptr[0xe1] | 0xf0;
+// 		}
+// 		else
+// 		{
+// 			if (offset == 0x3c4)
+// 			{
+// 				DMA1_CCR7_ptr[0xe1] = DMA1_CCR7_ptr[0xe1] | 0xf000;
+// 				return;
+// 			}
+// 			if (offset == 0x3d8)
+// 			{
+// 				DMA1_CCR7_ptr[0xe1] = DMA1_CCR7_ptr[0xe1] | 0xf0000;
+// 				return;
+// 			}
+// 		}
+// 		return;
+// 	}
+// 	if (dma_ccr == DMA_CCR4_PTR)
+// 	{
+// 		DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf000;
+// 		return;
+// 	}
+// 	if (dma_ccr == DMA_CCR4_PTR || (int)dma_ccr < (int)DMA_CCR4_PTR)
+// 	{
+// 		offset = (int)dma_ccr + DAT_08002e8c;
+// 		if (offset == 0)
+// 		{
+// 			DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf;
+// 			return;
+// 		}
+// 		if (offset == 0x14)
+// 		{
+// 			DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf0;
+// 			return;
+// 		}
+// 		if (offset == 0x28)
+// 		{
+// 			DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf00;
+// 		}
+// 	}
+// 	else
+// 	{
+// 		if ((int)dma_ccr - (int)DMA_CCR4_PTR == 0x14)
+// 		{
+// 			DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf0000;
+// 			return;
+// 		}
+// 		if ((int)dma_ccr - (int)DMA_CCR4_PTR == 0x28)
+// 		{
+// 			DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf00000;
+// 			return;
+// 		}
+// 	}
+// 	return;
+// }
+
+void FUN_08002d94(uint32_t *dma_ccr)
+{
+	uint32_t *dma_cndtr = dma_ccr + 0x4;
+	uint32_t *dma_cpar = dma_cndtr + 0x4;
+	uint32_t *dma_cmar = dma_cpar + 0x4;
+
+	*dma_ccr &= ~DMA_CCR_EN; // Disable DMA
+
+	*dma_ccr = 0;
+	*dma_cndtr = 0;
+	*dma_cpar = 0;
+	*dma_cmar = 0;
+}
+
+/**
  * @ 0x08004504
  * Progress: DONE
  */
