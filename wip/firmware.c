@@ -2,6 +2,7 @@
 #include <stdbool.h>
 
 #include <stm32f103xb.h>
+#include <stm32f101xe.h>
 #include <stm32f1xx_hal.h>
 
 #define CONST_UINT8_8_LUT_8TO15_080056EC 0x080056EC    // = [8, 9, 10, 11, 12, 13, 14, 15]
@@ -13,6 +14,7 @@
 #define UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c 0x2000000c // buffer_end - MIDI_BUFFER_SIZE
 #define UINT8_UNKNOWN_FLAG_0x20000011 0x20000011
 #define UNKNOWN_ENUM_0x20000012 0x20000012
+#define DMA1_MEM_0x2000013C 0x2000013C
 #define UINT8_SYSTICK_DECREMENTER_0_0x20000018 0x20000018 // Decrements on every SysTick Interrupt
 #define BOOL_8_SCALED_KNOB_VALS_CHANGED_0x20000019 0x20000019
 #define UINT8_8_PREV_SCALED_KNOB_VALS_0x20000021 0x20000021
@@ -76,10 +78,12 @@
 #define ADC_SQR3_OFFSET 0x34
 #define GPIO_CRL_OFFSET 0x00
 #define GPIO_CRH_OFFSET 0x04
-#define GPIO_CR_CNF_MODE 0x0F
 #define GPIO_BSRR_OFFSET 0x10
 #define GPIO_BRR_OFFSET 0x14
+#define GPIO_CR_CNF_MODE 0x0F
 
+#define DMA1_NUM_DATA 0x10
+#define ADC_N_CONV 0x10
 #define MIDI_MAX_CHANNEL 15   // 0xF
 #define MIDI_MAX_DATA_VAL 127 // 0x7F
 #define MIDI_BUFFER_SIZE 240  // 0xF0
@@ -313,10 +317,10 @@ void ADC_set_EXTTRIG_SWSTART(uint32_t adc_base, bool enable)
  * @ 0x0800249c
  * Progress: DONE
  */
-void ADC_set_DUALMOD_SCAN_CONT_ALIGN_EXTSEL_nconv(
+void ADC_set_DUALMOD_SCAN_CONT_EXTSEL_ALIGN_nconv(
     uint32_t adc_base,
     uint32_t msk_DUALMOD, bool SCAN,
-    bool CONT, uint32_t msk_ALIGN, uint32_t msk_EXTSEL,
+    bool CONT, uint32_t msk_EXTSEL, uint32_t msk_ALIGN,
     uint8_t n_conv)
 {
 	uint32_t *ADC_CR1 = adc_base + ADC_CR1_OFFSET;
@@ -352,9 +356,9 @@ void DMA_CCR_set_EN(uint32_t *dma_ccr, bool enable)
  * @ 0x08002eb0
  * Progress: DONE
  */
-void DMA_set_DIR_CIRC_PINC_MINC_PSIZE_MSIZE_PL_MEM2MEM_CNDTR_CPAR_CMAR(
+void DMA_set_CPAR_CMAR_DIR_CNDTR_PINC_MINC_PSIZE_MSIZE_CIRC_PL_MEM2MEM(
     uint32_t *dma_ccr,
-    uint32_t cpar, uint32_t cmar,
+    uint32_t *cpar, uint32_t *cmar,
     uint32_t dir_msk, uint32_t cndtr,
     uint32_t pinc_msk, uint32_t minc_msk,
     uint32_t psize_msk, uint32_t msize_msk,
@@ -376,98 +380,9 @@ void DMA_set_DIR_CIRC_PINC_MINC_PSIZE_MSIZE_PL_MEM2MEM_CNDTR_CPAR_CMAR(
 
 /**
  * @ 0x08002d94
+ * Progress: DONE
  */
-
-// void FUN_08002d94(uint *dma_ccr)
-// {
-// 	int offset;
-
-// 	*dma_ccr = *dma_ccr & 0xfffffffe;
-// 	*dma_ccr = 0;
-// 	dma_ccr[1] = 0;
-// 	dma_ccr[2] = 0;
-// 	dma_ccr[3] = 0;
-// 	offset = (int)dma_ccr - (int)DMA1_CCR7_ptr;
-// 	if (dma_ccr == DMA1_CCR7_ptr)
-// 	{
-// 		DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf000000;
-// 		return;
-// 	}
-// 	if (dma_ccr != DMA1_CCR7_ptr && (int)DMA1_CCR7_ptr <= (int)dma_ccr)
-// 	{
-// 		if (offset == 0x3b0)
-// 		{
-// 			DMA1_CCR7_ptr[0xe1] = DMA1_CCR7_ptr[0xe1] | 0xf00;
-// 			return;
-// 		}
-// 		if (offset < 0x3b1)
-// 		{
-// 			if (offset == 0x388)
-// 			{
-// 				DMA1_CCR7_ptr[0xe1] = DMA1_CCR7_ptr[0xe1] | 0xf;
-// 				return;
-// 			}
-// 			if (offset != 0x39c)
-// 			{
-// 				return;
-// 			}
-// 			DMA1_CCR7_ptr[0xe1] = DMA1_CCR7_ptr[0xe1] | 0xf0;
-// 		}
-// 		else
-// 		{
-// 			if (offset == 0x3c4)
-// 			{
-// 				DMA1_CCR7_ptr[0xe1] = DMA1_CCR7_ptr[0xe1] | 0xf000;
-// 				return;
-// 			}
-// 			if (offset == 0x3d8)
-// 			{
-// 				DMA1_CCR7_ptr[0xe1] = DMA1_CCR7_ptr[0xe1] | 0xf0000;
-// 				return;
-// 			}
-// 		}
-// 		return;
-// 	}
-// 	if (dma_ccr == DMA_CCR4_PTR)
-// 	{
-// 		DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf000;
-// 		return;
-// 	}
-// 	if (dma_ccr == DMA_CCR4_PTR || (int)dma_ccr < (int)DMA_CCR4_PTR)
-// 	{
-// 		offset = (int)dma_ccr + DAT_08002e8c;
-// 		if (offset == 0)
-// 		{
-// 			DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf;
-// 			return;
-// 		}
-// 		if (offset == 0x14)
-// 		{
-// 			DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf0;
-// 			return;
-// 		}
-// 		if (offset == 0x28)
-// 		{
-// 			DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf00;
-// 		}
-// 	}
-// 	else
-// 	{
-// 		if ((int)dma_ccr - (int)DMA_CCR4_PTR == 0x14)
-// 		{
-// 			DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf0000;
-// 			return;
-// 		}
-// 		if ((int)dma_ccr - (int)DMA_CCR4_PTR == 0x28)
-// 		{
-// 			DMA1_CCR7_ptr[-0x1f] = DMA1_CCR7_ptr[-0x1f] | 0xf00000;
-// 			return;
-// 		}
-// 	}
-// 	return;
-// }
-
-void FUN_08002d94(uint32_t *dma_ccr)
+void DMA_clear_IFCR(uint32_t *dma_ccr)
 {
 	uint32_t *dma_cndtr = dma_ccr + 0x4;
 	uint32_t *dma_cpar = dma_cndtr + 0x4;
@@ -475,10 +390,89 @@ void FUN_08002d94(uint32_t *dma_ccr)
 
 	*dma_ccr &= ~DMA_CCR_EN; // Disable DMA
 
+	// Reset DMA registers
 	*dma_ccr = 0;
 	*dma_cndtr = 0;
 	*dma_cpar = 0;
 	*dma_cmar = 0;
+
+	switch ((uintptr_t)dma_ccr)
+	{
+	case DMA1_Channel1_BASE:
+		DMA1->IFCR |= DMA_IFCR_CGIF1 |
+			      DMA_IFCR_CHTIF1 |
+			      DMA_IFCR_CTCIF1 |
+			      DMA_IFCR_CTEIF1;
+		break;
+	case DMA1_Channel2_BASE:
+		DMA1->IFCR |= DMA_IFCR_CGIF2 |
+			      DMA_IFCR_CHTIF2 |
+			      DMA_IFCR_CTCIF2 |
+			      DMA_IFCR_CTEIF2;
+		break;
+	case DMA1_Channel3_BASE:
+		DMA1->IFCR |= DMA_IFCR_CGIF3 |
+			      DMA_IFCR_CHTIF3 |
+			      DMA_IFCR_CTCIF3 |
+			      DMA_IFCR_CTEIF3;
+		break;
+	case DMA1_Channel4_BASE:
+		DMA1->IFCR |= DMA_IFCR_CGIF4 |
+			      DMA_IFCR_CHTIF4 |
+			      DMA_IFCR_CTCIF4 |
+			      DMA_IFCR_CTEIF4;
+		break;
+	case DMA1_Channel5_BASE:
+		DMA1->IFCR |= DMA_IFCR_CGIF5 |
+			      DMA_IFCR_CHTIF5 |
+			      DMA_IFCR_CTCIF5 |
+			      DMA_IFCR_CTEIF5;
+		break;
+	case DMA1_Channel6_BASE:
+		DMA1->IFCR |= DMA_IFCR_CGIF6 |
+			      DMA_IFCR_CHTIF6 |
+			      DMA_IFCR_CTCIF6 |
+			      DMA_IFCR_CTEIF6;
+		break;
+	case DMA1_Channel7_BASE:
+		DMA1->IFCR |= DMA_IFCR_CGIF7 |
+			      DMA_IFCR_CHTIF7 |
+			      DMA_IFCR_CTCIF7 |
+			      DMA_IFCR_CTEIF7;
+		break;
+	case DMA2_Channel1_BASE:
+		DMA2->IFCR |= DMA_IFCR_CGIF1 |
+			      DMA_IFCR_CHTIF1 |
+			      DMA_IFCR_CTCIF1 |
+			      DMA_IFCR_CTEIF1;
+		break;
+	case DMA2_Channel2_BASE:
+		DMA2->IFCR |= DMA_IFCR_CGIF2 |
+			      DMA_IFCR_CHTIF2 |
+			      DMA_IFCR_CTCIF2 |
+			      DMA_IFCR_CTEIF2;
+		break;
+	case DMA2_Channel3_BASE:
+		DMA2->IFCR |= DMA_IFCR_CGIF3 |
+			      DMA_IFCR_CHTIF3 |
+			      DMA_IFCR_CTCIF3 |
+			      DMA_IFCR_CTEIF3;
+		break;
+	case DMA2_Channel4_BASE:
+		DMA2->IFCR |= DMA_IFCR_CGIF4 |
+			      DMA_IFCR_CHTIF4 |
+			      DMA_IFCR_CTCIF4 |
+			      DMA_IFCR_CTEIF4;
+		break;
+	case DMA2_Channel5_BASE:
+		DMA2->IFCR |= DMA_IFCR_CGIF5 |
+			      DMA_IFCR_CHTIF5 |
+			      DMA_IFCR_CTCIF5 |
+			      DMA_IFCR_CTEIF5;
+		break;
+	default:
+		break;
+	}
 }
 
 /**
@@ -548,6 +542,100 @@ void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint
 }
 
 /**
+ * @ 0x080021cc
+ * Progress: ALMOST DONE
+ * TODO: Add more comments for DMA and ADC stuff
+ */
+void init_analog(void)
+{
+	//// Enable GPIO Port A - C clocks
+	RCC_set_APB2ENR(1 << RCC_APB2ENR_IOPAEN, true);
+	RCC_set_APB2ENR(1 << RCC_APB2ENR_IOPBEN, true);
+	RCC_set_APB2ENR(1 << RCC_APB2ENR_IOPCEN, true);
+
+	//// Initialize Analog Inputs
+
+	// Knobs 1-8
+	const uint32_t GPIO_0TO7_MSK = 0xFF;
+	GPIOs_cfg(GPIOA, &(gpio_cfg){GPIO_0TO7_MSK, 0, GPIO_CFG_OP_IN_ANALOG});
+
+	// Pads 1-2
+	const uint32_t GPIO_0TO3_MSK = 0x0F;
+	GPIOs_cfg(GPIOB, &(gpio_cfg){GPIO_0TO3_MSK, 0, GPIO_CFG_OP_IN_ANALOG});
+
+	// TODO: Pads 2-3 Missing??
+
+	// Pads 5-8
+	const uint32_t GPIO_2TO5_MSK = 0x3C;
+	GPIOs_cfg(GPIOC, &(gpio_cfg){GPIO_2TO5_MSK, 0, GPIO_CFG_OP_IN_ANALOG});
+
+	RCC_set_AHBENR(1 << RCC_AHBENR_DMA1EN, true);
+	RCC_set_APB2ENR(1 << RCC_APB2ENR_ADC1EN, true);
+
+	DMA_CLEAR_IFCR(DMA1_Channel1_BASE);
+	DMA_set_CPAR_CMAR_DIR_CNDTR_PINC_MINC_PSIZE_MSIZE_CIRC_PL_MEM2MEM(
+	    DMA1_Channel1_BASE,
+	    ADC1->DR,
+	    DMA1_MEM_0x2000013C,
+	    0x0,
+	    DMA1_NUM_DATA,
+	    0x0,
+	    DMA_CCR_MINC,
+	    DMA_CCR_PSIZE_0,
+	    DMA_CCR_MSIZE_0,
+	    DMA_CCR_CIRC,
+	    DMA_CCR_PL_1,
+	    0x0);
+	DMA_CCR_set_EN(DMA1_Channel1_BASE, true);
+
+	ADC_set_DUALMOD_SCAN_CONT_EXTSEL_ALIGN_nconv(
+	    ADC1_BASE,
+	    ADC_CR1_DUALMOD_1 | ADC_CR1_DUALMOD_2, // Regular simultaneous mode only
+	    true,
+	    false,
+	    ADC_CR2_EXTSEL, // SWSTART
+	    0x0,	    // Right-aligned
+	    ADC_N_CONV);
+
+	// Order in which ADC Channels are sampled
+	ADC_set_SMPR_SQR(ADC1_BASE, 0, 1, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 1, 2, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 2, 3, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 3, 4, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 4, 5, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 5, 6, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 6, 7, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 7, 8, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 8, 9, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 9, 10, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 10, 11, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 11, 12, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 12, 13, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 13, 14, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 14, 15, 6);
+	ADC_set_SMPR_SQR(ADC1_BASE, 15, 16, 6);
+
+	ADC_set_DMA(ADC1_BASE, true);
+	ADC_set_ADON(ADC1_BASE, true);
+	ADC_set_RSTCAL(ADC1_BASE);
+	while (ADC_read_RSTCAL(ADC1_BASE) != 0)
+		;
+	ADC_set_CAL(ADC1_BASE);
+	while (ADC_read_CAL(ADC1_BASE) != 0)
+		;
+
+	ADC_SET_ADON(ADC2_BASE, true);
+	ADC_SET_RSTCAL(ADC2_BASE);
+	while (ADC_READ_RSTCAL(ADC2_BASE) != 0)
+		;
+	ADC_SET_CAL(ADC2_BASE);
+	while (ADC_READ_CAL(ADC2_BASE) != 0)
+		;
+
+	ADC_SET_EXTTRIG_SWSTART(ADC1_BASE, true);
+}
+
+/**
  * @ 0x080039aa
  * Progress: DONE
  *
@@ -564,7 +652,7 @@ void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint
  * be suprised if the compiler optimization is to blame for this.
  */
 
-void cfg_gpios(uint32_t *gpio_base, gpio_cfg *gpio_cfg)
+void GPIOs_cfg(uint32_t *gpio_base, gpio_cfg *gpio_cfg)
 {
 	// By default, configure GPIOs to the mode specified
 	// by the lower 4 bits of the 'op' field
