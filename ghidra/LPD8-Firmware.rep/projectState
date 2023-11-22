@@ -80,6 +80,7 @@
             <STATE NAME="SHOW_TABLE" TYPE="boolean" VALUE="false" />
         </SAVE_STATE>
     </PROJECT_DATA_XML_NAME>
+    <OPEN_VIEW NAME="LPD8-Firmware-Desktop" LOCATION="/home/ctxz/dev/LPD8_RE/ghidra" />
     <TOOL_MANAGER ACTIVE_WORKSPACE="Workspace">
         <WORKSPACE NAME="Workspace" ACTIVE="true" />
     </TOOL_MANAGER>
