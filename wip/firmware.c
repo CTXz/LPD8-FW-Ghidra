@@ -8,6 +8,9 @@
 #define CONST_UINT8_8_LUT_8TO15_080056EC 0x080056EC    // = [8, 9, 10, 11, 12, 13, 14, 15]
 #define CONST_UINT8_127_LUT_1TO127_080056E4 0x080056E4 // = [1, 2, ... 126, 127, 127]
 
+#define UINT32_NVIC_VECTOR_TABLE_OFFSET 0x2000
+#define UINT32_NVIC_VETOR_TABLE_BASE 0x08000000
+
 #define UINT8_UNKNOWN_FLAG_0x20000000 0x20000000
 #define UINT8_MIDI_BUFFER_REMAINING_SPACE_0x20000004 0x20000004
 #define UINT8_PTR_PTR_MIDI_BUFFER_HEAD_0x20000008 0x20000008
@@ -230,6 +233,19 @@ void SysTick_Handler(void)
 
 	if (*systick_decr_1 != 0)
 		*systick_decr_1 = *systick_decr_1 - 1;
+}
+
+/**
+ * @ 0x08005518
+ * Progress: ALMOST DONE
+ * TODO: Confirm why 0x1FFFFF80
+ * 	 Make inline with two params
+ */
+void nvic_init_vector_table(void)
+{
+	const uint32_t base = UINT32_NVIC_VETOR_TABLE_BASE;
+	const uint32_t offset = UINT32_NVIC_VECTOR_TABLE_OFFSET;
+	SCB->VTOR = base | (offset & 0x1FFFFF80);
 }
 
 /**
