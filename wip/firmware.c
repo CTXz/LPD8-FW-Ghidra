@@ -6,13 +6,14 @@
 #include <stm32f1xx_hal.h>
 
 #define RCC_CFGR_USBPRE_BB (uint32_t *)(PERIPH_BB_BASE + (RCC_CFGR_OFFSET_BB * 32) + (RCC_CFGR_USBPRE_Pos * 4))
+#define RCC_CR_PLLON_BB (uint32_t *)(PERIPH_BB_BASE + (RCC_CR_OFFSET_BB * 32) + (RCC_CR_PLLON_Pos * 4))
 
 #define CONST_UINT8_8_LUT_8TO15_080056EC 0x080056EC    // = [8, 9, 10, 11, 12, 13, 14, 15]
 #define CONST_UINT8_127_LUT_1TO127_080056E4 0x080056E4 // = [1, 2, ... 126, 127, 127]
 
 #define UINT32_NVIC_VECTOR_TABLE_OFFSET 0x2000
 #define UINT32_NVIC_VETOR_TABLE_BASE 0x08000000
-#define UINT32_NVIC_VECTTAB_OFFSET_MASK 0x1FFFFF80
+#define UINT32_NVIC_VECTOR_TABLE_OFFSET_MASK 0x1FFFFF80
 
 #define UINT8_UNKNOWN_FLAG_0x20000000 0x20000000
 #define UINT8_MIDI_BUFFER_REMAINING_SPACE_0x20000004 0x20000004
@@ -120,6 +121,8 @@ typedef uint32_t unknown; // So the linter doesn't complain
 
 typedef uint8_t midi_data_t; // Only 7 bits are used
 typedef uint16_t adc_val_t;  // LPD8 configures ADC to 10-bit resolution
+typedef uint32_t systick_reload_t; // Only 3 Bytes (24 bits) are used
+typedef uint32_t bool32_t;
 
 typedef uint8_t pad_state_t;
 #define PAD_STATE_RELEASED 0
@@ -165,6 +168,12 @@ typedef uint8_t pad_toggled_t;
 typedef uint8_t midi_pending_t;
 #define NOT_PENDING 0x0
 #define PENDING 0x1
+
+typedef enum {
+	SYSTICK_RESET_VAL, // Implied zero, but not explicit
+	SYSTICK_ENABLE = 1,
+	SYSTICK_DISABLE = -2,
+} set_SYSTICK_param;
 
 typedef struct {
 	uint32_t gpios;
@@ -241,9 +250,64 @@ void nvic_init_vector_table(void)
 {
 	const uint32_t base = UINT32_NVIC_VETOR_TABLE_BASE;
 	const uint32_t offset = UINT32_NVIC_VECTOR_TABLE_OFFSET;
-	SCB->VTOR = base | (offset & UINT32_NVIC_VECTTAB_OFFSET_MASK);
+	SCB->VTOR = base | (offset & UINT32_NVIC_VECTOR_TABLE_OFFSET_MASK);
 }
 
+/**
+ * @ 0x08004ee8
+ * Progress: DONE
+ */
+void SYSTICK_set_RELOAD(systick_reload_t reload)
+{
+	SysTick->LOAD = reload;
+}
+
+
+/**
+ * @ 0x08004ea6
+ * Progress: DONE
+ */
+void SYSTICK_set_TICKINT(bool enable)
+{
+	if (enable)
+		SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
+	else
+		SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
+}
+
+/**
+ * @ 0x08004e80
+ * Progress: DONE
+ */
+void SYSTICK_action(set_SYSTICK_param action)
+{
+	switch (action) {
+	case SYSTICK_ENABLE:
+		SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
+		break;
+	case SYSTICK_DISABLE:
+		SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
+		break;
+	default:
+		SysTick->VAL = 0;
+		break;
+	}
+}
+
+/**
+ * @ 0x08004ec0
+ * Progress: INCOMPLETE
+ * TODO: Reverse FUN_08004558
+ */
+void init_SYSTICK(void)
+{
+	uint8_t auStack_18 [4];
+	uint32_t sys_core_clock_maybe;
+	FUN_08004558(auStack_18);
+	SYSTICK_set_RELOAD(sys_core_clock_maybe / 8000);
+	SYSTICK_set_TICKINT(true);
+	SYSTICK_action(SYSTICK_ENABLE);
+}
 
 /**
  * @ 0x08005670
@@ -258,16 +322,6 @@ void init_midi_buffer(void)
 	*head = UINT8_PTR_MIDI_BUFFER_TAIL_0x2000015c;
 	*tail = UINT8_PTR_MIDI_BUFFER_TAIL_0x2000015c;
 	*remaining_space = MIDI_BUFFER_SIZE;
-}
-
-/**
- * @ 0x0800474c
- * Progress: DONE
- */
-void RCC_set_CFGR_USBPRE_BB(uint32_t set)
-{
-	*RCC_CFGR_USBPRE_BB = set;
-
 }
 
 /**
@@ -582,6 +636,44 @@ void DMA_set_IFCR(uint32_t msk)
 	else
 		DMA1->IFCR |= msk;
 }
+
+/**
+ * @ 0x08004738
+ * Progress: DONE
+ */
+void RCC_set_SW(uint32_t msk)
+{
+	RCC->CFGR &= ~RCC_CFGR_SW; // HSI selected as system clock
+	RCC->CFGR |= msk;
+}
+
+/**
+ * @ 0x0800474c
+ * Progress: DONE
+ */
+void RCC_set_USBPRE_BB(bool32_t set)
+{
+	*RCC_CFGR_USBPRE_BB = set;
+}
+
+/**
+ * @ 0x08004630
+ * Progress: DONE
+ */
+uint32_t RCC_get_SWS(void)
+{
+	return RCC->CFGR & RCC_CFGR_SWS;
+}
+
+/**
+ * @ 0x08004718
+ * Progress: DONE
+ */
+void RCC_set_PLLON_BB(bool32_t set)
+{
+	*RCC_CR_PLLON_BB = set;
+}
+
 
 /**
  * @ 0x08004504
