@@ -22,7 +22,7 @@
 #define UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c 0x2000000c // buffer_end - MIDI_BUFFER_SIZE
 #define UINT8_UNKNOWN_FLAG_0x20000011 0x20000011
 #define UNKNOWN_ENUM_0x20000012 0x20000012
-#define DMA1_MEM_0x2000013C 0x2000013C
+#define UINT16_16_DMA1_MEM_0x2000013C 0x2000013C
 #define UINT8_SYSTICK_DECREMENTER_0_0x20000018 0x20000018 // Decrements on every SysTick Interrupt
 #define BOOL_8_SCALED_KNOB_VALS_CHANGED_0x20000019 0x20000019
 #define UINT8_8_PREV_SCALED_KNOB_VALS_0x20000021 0x20000021
@@ -31,25 +31,26 @@
 #define UINT8_PREV_SELECTED_PROG_0x20000032 0x20000032
 #define UINT8_8_PREV_PADS_STATE_0x20000033 0x20000033
 #define UINT8_SYSTICK_DECREMENTER_1_0x2000003c 0x2000003c // Decrements on every SysTick Interrupt
+#define UINT8_DMA1_STORE_CNTR_0x2000003d 0x2000003d
 #define UINT8_DEBOUNCE_COUNTER_0x2000003e 0x2000003e
 #define UINT8_SELECTED_MODE_0x2000003f 0x2000003f
-#define UINT8_UNKNOWN_READY_0x20000040 0x20000040
-#define UINT8_UNKNOWN_READY_0x20000041 0x20000041
+#define UINT8_KNOB_ANALOG_VALS_READY_0x20000040 0x20000040
+#define UINT8_PAD_ANALOG_VALS_READY_0x20000041 0x20000041
 #define UINT8_SELECTED_PROG_0x20000042 0x20000042
 #define UINT8_PREV_MODE_0x20000043 0x20000043
 #define UINT16_PREV_MODE_PB_IDR_BITS_0x20000044 0x20000044
 #define UINT16_PREV_MODE_PB_IDR_BITS_0x20000046 0x20000046
 #define UINT16_MODE_PB_IDR_BITS_CPY_0x20000048 0x20000048
+#define UINT16_16_PREV_DMA1_MEM_0x2000057A 0x2000057A
 #define UINT8_UNKNOWN_FLAG_0x20000098 0x20000098
 #define UINT8_PTR_MIDI_BUFFER_TAIL_0x2000015c 0x2000015c
 #define UINT8_MIDI_BUFFER_END_0x2000024C 0x2000024C
 #define PROGRAM_SETTINGS_5_0x200003CC 0x200003CC
-#define UINT16_8_PREV_ACCEPTED_KNOB_ADC_VALS_0x200004EA 0x200004EA
+#define UINT16_8_PREV_ACCEPTED_KNOB_ANALOG_VALS_0x200004EA 0x200004EA
 #define PAD_HANDLING_DATA_8_0x200004FA 0x200004FA
 #define PENDING_MIDI_8_RELEASE_MIDI_0x2000052a 0x2000052a
 #define PAD_STATES_8_0x20000552 0x20000552
-#define UINT16_8_KNOB_ADC_VALS_0x2000059A 0x2000059A
-#define UINT16_8_PAD_ADC_VALS_0x200005AA 0x200005AA
+#define FILTERED_ANALOG_INPUTS_0x2000059A 0x2000059A
 
 // TODO Examine data structure
 #define PROG_4_SELECT_FLAG 0x2000050c		    // uint8_t
@@ -91,7 +92,8 @@
 #define GPIO_CR_CNF_MODE 0x0F
 
 #define IWDG_RL_VAL 1250
-#define DMA1_NUM_DATA 0x10
+#define DMA1_NUM_DATA 16
+#define DMA1_STORE_INTERVAL 4
 #define ADC_N_CONV 0x10
 #define SYSTICK_RELOAD_AHB_DIV 8000
 #define MIDI_MAX_CHANNEL 15   // 0xF
@@ -104,26 +106,26 @@
 #define ADC_KNOB_NOISE_GATE 15 // 0x0F
 #define MAX_ADC_KNOB_VAL 0x3FF
 #define MAX_ADC_PAD_VAL 0x2A0
-#define PAD_ADC_CONSIDERED_RELEASED 64
-#define PAD_ADC_CONSIDERED_PRESSED MIDI_MAX_DATA_VAL + 2
+#define PAD_analog_CONSIDERED_RELEASED 64
+#define PAD_analog_CONSIDERED_PRESSED MIDI_MAX_DATA_VAL + 2
 #define PAD_PRESS_INCR_COMPLETE 4
 #define PAD_RELEASE_DECR_START 30
 #define PAD_MODE_RELEASE_DATA2 MIDI_MAX_DATA_VAL
 #define CC_MODE_RELEASE_DATA2 0x00
 #define PROG_CHNG_MODE_RELEASE_DATA2 0x00
 #define PROG_CHNG_MODE_PRESS_DATA2 0x00
-#define N_PADS 8
 #define N_KNOBS 8
-#define N_PADS_OR_KNOBS 8
+#define N_PADS 8
+#define N_KNOBSOR_PADS 8
 
 // #define EXCEEDS_THRESHOLD(x, y, threshold) ((x) < (y) + (threshold) || (y) < (x) + (threshold))
 #define EXCEEDS_THRESHOLD(x, y, threshold) ((x) + (threshold) <= (y) || (y) + (threshold) <= (x))
 
 typedef uint32_t unknown; // So the linter doesn't complain
 
-typedef uint8_t midi_data_t;	   // Only 7 bits are used
-typedef uint16_t adc_val_t;	   // LPD8 configures ADC to 10-bit resolution
-typedef uint32_t systick_reload_t; // Only 3 Bytes (24 bits) are used
+typedef uint8_t midi_data_t;	     // Only 7 bits are used
+typedef uint16_t filtered_adc_val_t; // For ADC vals downscaled to 10 bits
+typedef uint32_t systick_reload_t;   // Only 3 Bytes (24 bits) are used
 typedef uint32_t bool32_t;
 
 typedef uint32_t SWS_t;
@@ -196,6 +198,12 @@ typedef struct
 	uint32_t other_cr_bits; // CNF + MODE, only used if op == GPIO_CFG_OP_OTHER
 	gpio_operation_t op;
 } gpio_cfg;
+
+typedef struct
+{
+	filtered_adc_val_t knobs[N_KNOBS];
+	filtered_adc_val_t pads[N_PADS];
+} filtered_analog_inputs;
 
 typedef struct
 {
@@ -320,7 +328,7 @@ void SYSTICK_action(set_SYSTICK_param_t action)
 /**
  * @ 0x08004558
  * PROGRESS: DONE
- * See P.99, Chapter 7.3 - RCC Registers in RM0008
+ * See P.99, Section 7.3 - RCC Register in RM0008
  */
 void RCC_get_clock_freqs(clock_freqs *cfreqs)
 {
@@ -699,6 +707,7 @@ void DMA_clear_IFCR(uint32_t *dma_ccr)
 /**
  * @ 0x08002e90
  * Progress: DONE
+ * See P. 284, Section 13.4.1 - DMA_ISR Register in RM0008
  */
 bool DMA_read_ISR(uint32_t msk)
 {
@@ -863,7 +872,7 @@ void init_analog(void)
 	DMA_set_CPAR_CMAR_DIR_CNDTR_PINC_MINC_PSIZE_MSIZE_CIRC_PL_MEM2MEM(
 	    DMA1_Channel1_BASE,
 	    ADC1->DR,
-	    DMA1_MEM_0x2000013C,
+	    UINT16_16_DMA1_MEM_0x2000013C,
 	    0x0,
 	    DMA1_NUM_DATA,
 	    0x0,
@@ -1071,9 +1080,10 @@ void eval_knobs(void)
 	bool *scaled_knob_vals_changed = BOOL_8_SCALED_KNOB_VALS_CHANGED_0x20000019;
 	midi_data_t *prev_scaled_knob_vals = UINT8_8_PREV_SCALED_KNOB_VALS_0x20000021;
 	midi_data_t *prev_prev_scaled_knob_vals = UINT8_8_PREV_PREV_SCALED_KNOB_VALS_0x20000029;
-	adc_val_t *prev_accepted_knob_adc_vals = UINT16_8_PREV_ACCEPTED_KNOB_ADC_VALS_0x200004EA;
-	adc_val_t *knob_adc_vals = UINT16_8_KNOB_ADC_VALS_0x2000059A;
-	ready_t *ready = UINT8_UNKNOWN_READY_0x20000040;
+	filtered_adc_val_t *prev_accepted_knob_analog_vals = UINT16_8_PREV_ACCEPTED_KNOB_ANALOG_VALS_0x200004EA;
+	filtered_analog_inputs *filtered_analog_inputs = FILTERED_ANALOG_INPUTS_0x2000059A;
+	filtered_adc_val_t *knob_analog_vals = &filtered_analog_inputs->knobs;
+	ready_t *knob_analog_rdy = UINT8_KNOB_ANALOG_VALS_READY_0x20000040;
 
 	/*
 	 * Appears to be reset after intervals of 4 calls
@@ -1097,11 +1107,11 @@ void eval_knobs(void)
 		bool *scaled_knob_val_changed = &scaled_knob_vals_changed[i];
 		midi_data_t *prev_knob_scaled_val = &prev_scaled_knob_vals[i];
 		midi_data_t *prev_prev_knob_scaled_val = &prev_prev_scaled_knob_vals[i];
-		adc_val_t *prev_accepted_knob_adc_val = &prev_accepted_knob_adc_vals[i];
-		adc_val_t *knob_adc_val = &knob_adc_vals[i];
+		filtered_adc_val_t *prev_accepted_knob_analog_val = &prev_accepted_knob_analog_vals[i];
+		filtered_adc_val_t *knob_analog_val = &knob_analog_vals[i];
 
-		const uint32_t _prev_accepted_knob_adc_val = (uint32_t)*prev_accepted_knob_adc_val;
-		const uint32_t _knob_adc_val = (uint32_t)*knob_adc_val;
+		const uint32_t _prev_accepted_knob_analog_val = (uint32_t)*prev_accepted_knob_analog_val;
+		const uint32_t _knob_analog_val = (uint32_t)*knob_analog_val;
 
 		// Knobs with CC 0 are ignored/disabled
 		if (knob_cc == 0)
@@ -1109,8 +1119,8 @@ void eval_knobs(void)
 
 		// Only update if knob has been moved beyond threshold
 		if (!EXCEEDS_THRESHOLD(
-			_knob_adc_val,
-			_prev_accepted_knob_adc_val,
+			_knob_analog_val,
+			_prev_accepted_knob_analog_val,
 			ADC_KNOB_CHANGE_THRESHOLD))
 			continue;
 
@@ -1152,7 +1162,7 @@ void eval_knobs(void)
 		{
 			uint8_t range = (knob_rightmost - knob_leftmost) + 1;
 			scaled = knob_leftmost +
-				 (_knob_adc_val * range) /
+				 (_knob_analog_val * range) /
 				     (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
 
 			if (knob_rightmost < scaled)
@@ -1162,7 +1172,7 @@ void eval_knobs(void)
 		{
 			uint8_t range = (knob_rightmost - knob_leftmost) + 1;
 			scaled = knob_leftmost -
-				 (_knob_adc_val * range) /
+				 (_knob_analog_val * range) /
 				     (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
 
 			if (knob_rightmost > knob_leftmost)
@@ -1189,8 +1199,8 @@ void eval_knobs(void)
 			if (*prev_prev_knob_scaled_val == scaled &&
 			    *scaled_knob_val_changed &&
 			    !EXCEEDS_THRESHOLD(
-				_prev_accepted_knob_adc_val,
-				_knob_adc_val,
+				_prev_accepted_knob_analog_val,
+				_knob_analog_val,
 				ADC_KNOB_NOISE_GATE))
 				continue;
 
@@ -1223,8 +1233,66 @@ void eval_knobs(void)
 			write_midi_buffer(&data, sizeof(data));
 		}
 
-		*prev_accepted_knob_adc_val = *knob_adc_val;
+		*prev_accepted_knob_analog_val = *knob_analog_val;
 	}
+}
+
+/**
+ * @ 0x080023fc
+ * Progress: DONE
+ */
+void read_analog(void)
+{
+	uint16_t *prev_dma1_mem = UINT16_16_PREV_DMA1_MEM_0x2000057A;
+	uint16_t *dma1_mem = UINT16_16_DMA1_MEM_0x2000013C;
+	filtered_adc_val_t *filtered = FILTERED_ANALOG_INPUTS_0x2000059A;
+	uint8_t *store_cntr = UINT8_DMA1_STORE_CNTR_0x2000003d;
+	ready_t *knob_analog_rdy = UINT8_KNOB_ANALOG_VALS_READY_0x20000040;
+	ready_t *pad_analog_rdy = UINT8_PAD_ANALOG_VALS_READY_0x20000041;
+
+	const bool dma1_tcif1 = DMA_read_ISR(DMA_ISR_TCIF1);
+
+	// Check if transfer not complete
+	if (!dma1_tcif1)
+		return;
+
+	for (uint8_t i = 0; i < DMA1_NUM_DATA; i++)
+	{
+		const uint16_t dma_val = dma1_mem[i];
+
+		/* Dispose top 4 bits since ADC only uses 12 bits
+		 *
+		 * Not sure why this is necessary? Perhaps the unused
+		 * bits may contain garbage data when the ADC writes
+		 * to memory via DMA?
+		 *
+		 * As an additional note, this could easily be done
+		 * with a bit mask as well... */
+		uint32_t dma_val_mut = (uint32_t)dma_val;
+		dma_val_mut = dma_val_mut << 20;
+		dma_val_mut = dma_val_mut >> 20;
+
+		prev_dma1_mem[i] = (uint16_t)dma_val_mut;
+	}
+
+	(*store_cntr)++;
+
+	if (store_cntr >= DMA1_STORE_INTERVAL)
+	{
+		*store_cntr = 0;
+
+		for (uint8_t i = 0; i < DMA1_NUM_DATA; i++)
+		{
+			filtered[i] = prev_dma1_mem[i] >> 4;
+			prev_dma1_mem[i] = 0;
+		}
+
+		*knob_analog_rdy = READY;
+		*pad_analog_rdy = READY;
+	}
+
+	DMA_set_IFCR(DMA_IFCR_CTCIF1);
+	ADC_set_EXTTRIG_SWSTART(ADC1_BASE, true);
 }
 
 /**
@@ -1239,13 +1307,14 @@ void eval_pads(void)
 	const uint8_t *plus_1_max_127 = CONST_UINT8_127_LUT_1TO127_080056E4;
 	const mode_t sel_mode = *(uint8_t *)UINT8_SELECTED_MODE_0x2000003f;
 
-	uint8_t *ready = UINT8_UNKNOWN_READY_0x20000041;
+	uint8_t *pad_analog_rdy = UINT8_PAD_ANALOG_VALS_READY_0x20000041;
 	pending_midi *pads_on_release_midi = PENDING_MIDI_8_RELEASE_MIDI_0x2000052a;
 	uint8_t *all_prog_settings = PROGRAM_SETTINGS_5_0x200003CC;
 	program_settings *sel_prog_settings = &all_prog_settings[sel_prog];
 	pad_states *pads_states = PAD_STATES_8_0x20000552;
 	pad_handling_data *pads_hd = PAD_HANDLING_DATA_8_0x200004FA;
-	adc_val_t *pad_adc_vals = UINT16_8_PAD_ADC_VALS_0x200005AA;
+	filtered_analog_inputs *filtered_analog_inputs = FILTERED_ANALOG_INPUTS_0x2000059A;
+	filtered_adc_val_t *pad_analog_vals = &filtered_analog_inputs->pads;
 
 	uint8_t status_msbyte = 0;
 	uint8_t data1 = 0;
@@ -1267,7 +1336,7 @@ void eval_pads(void)
 	{
 
 		pad_handling_data *pad_hd = &pads_hd[i];
-		adc_val_t pad_adc_val = pad_adc_vals[i];
+		filtered_adc_val_t pad_analog_val = pad_analog_vals[i];
 		pad_states *states = &pads_states[i];
 		pad_settings *settings = &sel_prog_settings->pads[i];
 		pending_midi *on_release_midi = &pads_on_release_midi[i];
@@ -1277,7 +1346,7 @@ void eval_pads(void)
 		{
 		case CONFIRMED_PRESSED:
 
-			if (pad_adc_val <= PAD_ADC_CONSIDERED_RELEASED)
+			if (pad_analog_val <= PAD_analog_CONSIDERED_RELEASED)
 			{
 
 				if (pad_hd->rel_decr == 0)
@@ -1301,13 +1370,13 @@ void eval_pads(void)
 
 		case CONFIRMED_RELEASED:
 
-			if (pad_adc_val < PAD_ADC_CONSIDERED_PRESSED)
+			if (pad_analog_val < PAD_analog_CONSIDERED_PRESSED)
 				break;
 
 			if (pad_hd->press_incr == 0 ||
-			    pad_hd->adc_eval < pad_adc_val)
+			    pad_hd->adc_eval < pad_analog_val)
 			{
-				pad_hd->adc_eval = pad_adc_val;
+				pad_hd->adc_eval = pad_analog_val;
 			}
 
 			if (pad_hd->press_incr < PAD_PRESS_INCR_COMPLETE)
@@ -1329,7 +1398,7 @@ void eval_pads(void)
 				 * 	- mm is the maximum MIDI data value (127)
 				 * 	- ma is the maximum allowed/possible ADC value (672)
 				 * 		- Note that the lower limit is set by
-				 * 		  PAD_ADC_CONSIDERED_PRESSED, which is
+				 * 		  PAD_analog_CONSIDERED_PRESSED, which is
 				 * 		  mm + 2. This prevents a underflow.
 				 * 	- a is the maximum recorded ADC value (caps at ma)
 				 *
@@ -2026,7 +2095,7 @@ void main_loop()
 				LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_8_GPIO);
 			}
 
-			FUN_080023fc();
+			read_analog();
 			eval_knobs();
 			eval_pads();
 			read_mode_pbs();
