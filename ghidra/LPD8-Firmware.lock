@@ -1,9 +1,9 @@
 #Ghidra Lock File
-#Tue Nov 28 21:31:10 CET 2023
+#Sun Jan 07 12:25:06 CET 2024
 OS\ Name=Linux
-OS\ Version=5.4.0-166-generic
+OS\ Version=5.4.0-169-generic
 Username=ctxz
 Hostname=obama
 <META>\ Supports\ File\ Channel\ Locking=Channel Lock
 OS\ Architecture=amd64
-Timestamp=11/28/23, 9\:31 PM
+Timestamp=1/7/24, 12\:25 PM

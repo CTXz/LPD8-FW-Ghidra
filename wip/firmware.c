@@ -4,53 +4,84 @@
 #include <stm32f103xb.h>
 #include <stm32f101xe.h>
 #include <stm32f1xx_hal.h>
+#include <stm32f1xx_ll_usb.h>
 
 #define RCC_CFGR_USBPRE_BB (uint32_t *)(PERIPH_BB_BASE + (RCC_CFGR_OFFSET_BB * 32) + (RCC_CFGR_USBPRE_Pos * 4))
 #define RCC_CR_PLLON_BB (uint32_t *)(PERIPH_BB_BASE + (RCC_CR_OFFSET_BB * 32) + (RCC_CR_PLLON_Pos * 4))
 
-#define CONST_UINT8_8_LUT_8TO15_080056EC 0x080056EC	  // = [8, 9, 10, 11, 12, 13, 14, 15]
-#define CONST_UINT8_127_LUT_1TO127_080056E4 0x080056E4	  // = [1, 2, ... 126, 127, 127]
-#define CONST_UINT8_PRE_HPRE_TO_RSHFT_080056DC 0x080056DC // Converts PRE and HPRE values to right shifts for clock division
+#define CONST_UINT8_8_PTR_LUT_8TO15_080056EC 0x080056EC	  // = [8, 9, 10, 11, 12, 13, 14, 15]
+#define CONST_UINT8_127_PTR_LUT_1TO127_080056E4 0x080056E4	  // = [1, 2, ... 126, 127, 127]
+#define CONST_UINT8_PTR_PRE_HPRE_TO_RSHFT_080056DC 0x080056DC // Converts PRE and HPRE values to right shifts for clock division
+#define CONST_CHAR_PTR_UNKNOWN_0x8005871 0x8005871
 
-#define UINT32_NVIC_VECTOR_TABLE_OFFSET 0x2000
-#define UINT32_NVIC_VETOR_TABLE_BASE 0x08000000
-#define UINT32_NVIC_VECTOR_TABLE_OFFSET_MASK 0x1FFFFF80
+/**
+ * /////////////////////////////////////////////////
+ * // NVIC
+ * /////////////////////////////////////////////////
+ *
+ * The LPD8 has two vector tables:
+ * 	- One for the bootloader, used for firmware updates.
+ * 	  The bootloader can be entered by holding PROGRAM on boot
+ * 	- One for the firmware
+ * The vector tables are located at:
+ * 	- 0x08000000 for the bootloader
+ * 	- 0x08002000 for the firmware
+ *
+ * ISR's for the bootloader are prefixed with ISR_BL_,
+ * ISR's for the firmware are prefixed with ISR_FW_
+ */
+#define NVIC_FIRMWARE_VECTOR_TABLE_OFFSET 0x2000
+#define UINT32_PTR_NVIC_VETOR_TABLE_BASE 0x08000000
+#define UINT32_PTR_NVIC_FIRMWARE_VECTOR_TABLE_OFFSET_MASK 0x1FFFFF80
+#define UINT32_PTR_NVIC_PRIO_BASE 0xE000E400
 
-#define UINT8_UNKNOWN_FLAG_0x20000000 0x20000000
-#define UINT8_MIDI_BUFFER_REMAINING_SPACE_0x20000004 0x20000004
+#define UINT8_PTR_UNKNOWN_FLAG_0x20000000 0x20000000
+#define UINT8_PTR_MIDI_BUFFER_REMAINING_SPACE_0x20000004 0x20000004
 #define UINT8_PTR_PTR_MIDI_BUFFER_HEAD_0x20000008 0x20000008
 #define UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c 0x2000000c // buffer_end - MIDI_BUFFER_SIZE
-#define UINT8_UNKNOWN_FLAG_0x20000011 0x20000011
-#define UNKNOWN_ENUM_0x20000012 0x20000012
-#define UINT16_16_DMA1_MEM_0x2000013C 0x2000013C
-#define UINT8_SYSTICK_DECREMENTER_0_0x20000018 0x20000018 // Decrements on every SysTick Interrupt
-#define BOOL_8_SCALED_KNOB_VALS_CHANGED_0x20000019 0x20000019
-#define UINT8_8_PREV_SCALED_KNOB_VALS_0x20000021 0x20000021
-#define UINT8_8_PREV_PREV_SCALED_KNOB_VALS_0x20000029 0x20000029
-#define UINT8_PREV_MODE_0x20000031 0x20000031
-#define UINT8_PREV_SELECTED_PROG_0x20000032 0x20000032
-#define UINT8_8_PREV_PADS_STATE_0x20000033 0x20000033
-#define UINT8_SYSTICK_DECREMENTER_1_0x2000003c 0x2000003c // Decrements on every SysTick Interrupt
-#define UINT8_DMA1_STORE_CNTR_0x2000003d 0x2000003d
-#define UINT8_DEBOUNCE_COUNTER_0x2000003e 0x2000003e
-#define UINT8_SELECTED_MODE_0x2000003f 0x2000003f
-#define UINT8_KNOB_ANALOG_VALS_READY_0x20000040 0x20000040
-#define UINT8_PAD_ANALOG_VALS_READY_0x20000041 0x20000041
-#define UINT8_SELECTED_PROG_0x20000042 0x20000042
-#define UINT8_PREV_MODE_0x20000043 0x20000043
-#define UINT16_PREV_MODE_PB_IDR_BITS_0x20000044 0x20000044
-#define UINT16_PREV_MODE_PB_IDR_BITS_0x20000046 0x20000046
-#define UINT16_MODE_PB_IDR_BITS_CPY_0x20000048 0x20000048
-#define UINT16_16_PREV_DMA1_MEM_0x2000057A 0x2000057A
-#define UINT8_UNKNOWN_FLAG_0x20000098 0x20000098
+#define UINT8_PTR_UNKNOWN_FLAG_0x20000011 0x20000011
+#define UNKNOWN_ENUM_PTR_0x20000012 0x20000012
+#define UNKNOWN_PTR_0x20000014 0x20000014
+#define UINT8_PTR_SYSTICK_DECREMENTER_0_0x20000018 0x20000018 // Decrements on every SysTick Interrupt
+#define BOOL_8_PTR_SCALED_KNOB_VALS_CHANGED_0x20000019 0x20000019
+#define UINT8_8_PTR_PREV_SCALED_KNOB_VALS_0x20000021 0x20000021
+#define UINT8_8_PTR_PREV_PREV_SCALED_KNOB_VALS_0x20000029 0x20000029
+#define UINT8_PTR_PREV_MODE_0x20000031 0x20000031
+#define UINT8_PTR_PREV_SELECTED_PROG_0x20000032 0x20000032
+#define UINT8_8_PTR_PREV_PADS_STATE_0x20000033 0x20000033
+#define UINT8_PTR_SYSTICK_DECREMENTER_1_0x2000003c 0x2000003c // Decrements on every SysTick Interrupt
+#define UINT8_PTR_DMA1_STORE_CNTR_0x2000003d 0x2000003d
+#define UINT8_PTR_DEBOUNCE_COUNTER_0x2000003e 0x2000003e
+#define UINT8_PTR_SELECTED_MODE_0x2000003f 0x2000003f
+#define UINT8_PTR_KNOB_ANALOG_VALS_READY_0x20000040 0x20000040
+#define UINT8_PTR_PAD_ANALOG_VALS_READY_0x20000041 0x20000041
+#define UINT8_PTR_SELECTED_PROG_0x20000042 0x20000042
+#define UINT8_PTR_PREV_MODE_0x20000043 0x20000043
+#define UINT16_PTR_PREV_MODE_PB_IDR_BITS_0x20000044 0x20000044
+#define UINT16_PTR_PREV_MODE_PB_IDR_BITS_0x20000046 0x20000046
+#define UINT16_PTR_MODE_PB_IDR_BITS_CPY_0x20000048 0x20000048
+#define UINT16_PTR_USB_SOF_COUNTER_0x2000004C 0x2000004C // Start-Of-Frame Counter: Increments every 1ms
+#define UINT32_PTR_UNKNOWN_0x2000004D 0x2000004D
+#define UINT16_PTR_UNKNOWN_0x20000054 0x20000054
+#define UINT16_PTR_USB_ISTR_CPY_0x20000056 0x20000056
+#define UINT32_PTR_USB_CNTR_MASK_0x20000094 0x20000094
+#define UINT32_PTR_PTR_UNKNOWN_0x20000098 0x20000098
+#define UNKNOWN_PTR_PTR_PTR_0x2000009C 0x2000009C
+#define UNKNOWN_PTR_0x200000A0 0x200000A0
+#define UNKNOWN_PTR_PTR_200000E8 0x200000E8
+#define FPTR_PTR_FW_USB_RESET_CALLBACK_200000EC 0x200000EC
+#define UINT32_PTR_UNKNOWN_0x20000118 0x20000118
+#define UINT16_16_PTR_DMA1_MEM_0x2000013C 0x2000013C
 #define UINT8_PTR_MIDI_BUFFER_TAIL_0x2000015c 0x2000015c
-#define UINT8_MIDI_BUFFER_END_0x2000024C 0x2000024C
-#define PROGRAM_SETTINGS_5_0x200003CC 0x200003CC
-#define UINT16_8_PREV_ACCEPTED_KNOB_ANALOG_VALS_0x200004EA 0x200004EA
-#define PAD_HANDLING_DATA_8_0x200004FA 0x200004FA
-#define PENDING_MIDI_8_RELEASE_MIDI_0x2000052a 0x2000052a
-#define PAD_STATES_8_0x20000552 0x20000552
-#define FILTERED_ANALOG_INPUTS_0x2000059A 0x2000059A
+#define UINT8_PTR_MIDI_BUFFER_END_0x2000024C 0x2000024C
+#define PROGRAM_SETTINGS_5_PTR_0x200003CC 0x200003CC
+#define UINT16_8_PTR_PREV_ACCEPTED_KNOB_ANALOG_VALS_0x200004EA 0x200004EA
+#define PAD_HANDLING_DATA_8_PTR_0x200004FA 0x200004FA
+#define PENDING_MIDI_8_PTR_RELEASE_MIDI_0x2000052a 0x2000052a
+#define PAD_STATES_8_PTR_0x20000552 0x20000552
+#define UINT16_16_PTR_PREV_DMA1_MEM_0x2000057A 0x2000057A
+#define FILTERED_ANALOG_INPUTS_PTR_0x2000059A 0x2000059A
+#define UINT32_PTR_UNKNOWN_200005BC 0x200005BC
 
 // TODO Examine data structure
 #define PROG_4_SELECT_FLAG 0x2000050c		    // uint8_t
@@ -70,6 +101,7 @@
 #define LED_PB_PAD_GPIO 13
 #define LED_PB_PROG_CHNG_GPIO 14
 #define LED_PB_CC_GPIO 15
+#define GPIOA_USB_FULL_SPEED_PU GPIO_PIN_8
 
 #define PB_GPIO_PORT GPIOC
 #define PB_PROG_GPIO 6
@@ -122,6 +154,8 @@
 #define EXCEEDS_THRESHOLD(x, y, threshold) ((x) + (threshold) <= (y) || (y) + (threshold) <= (x))
 
 typedef uint32_t unknown; // So the linter doesn't complain
+typedef void (*fptr)(void);
+
 
 typedef uint8_t midi_data_t;	     // Only 7 bits are used
 typedef uint16_t filtered_adc_val_t; // For ADC vals downscaled to 10 bits
@@ -184,29 +218,46 @@ typedef int32_t set_SYSTICK_param_t;
 #define SYSTICK_ENABLE 0x1
 #define SYSTICK_DISABLE 0x2
 
-typedef struct
-{
+typedef uint8_t GPIO_CR_CNF_MODE_t;
+#define GPIO_CR_CNF_MODE_INPUT_ANALOG 0b0000
+#define GPIO_CR_CNF_MODE_INPUT_FLOATING 0b0100
+#define GPIO_CR_CNF_MODE_INPUT_PULL_UP_DOWN 0b1000
+#define GPIO_CR_CNF_MODE_OUTPUT_PUSH_PULL_10MHZ 0b0001
+#define GPIO_CR_CNF_MODE_OUTPUT_OPEN_DRAIN_10MHZ 0b0101
+#define GPIO_CR_CNF_MODE_OUTPUT_ALT_PUSH_PULL_10MHZ 0b1001
+#define GPIO_CR_CNF_MODE_OUTPUT_ALT_OPEN_DRAIN_10MHZ 0b1101
+#define GPIO_CR_CNF_MODE_OUTPUT_PUSH_PULL_2MHZ 0b0010
+#define GPIO_CR_CNF_MODE_OUTPUT_OPEN_DRAIN_2MHZ 0b0110
+#define GPIO_CR_CNF_MODE_OUTPUT_ALT_PUSH_PULL_2MHZ 0b1010
+#define GPIO_CR_CNF_MODE_OUTPUT_ALT_OPEN_DRAIN_2MHZ 0b1110
+#define GPIO_CR_CNF_MODE_OUTPUT_PUSH_PULL_50MHZ 0b0011
+#define GPIO_CR_CNF_MODE_OUTPUT_OPEN_DRAIN_50MHZ 0b0111
+#define GPIO_CR_CNF_MODE_OUTPUT_ALT_PUSH_PULL_50MHZ 0b1011
+#define GPIO_CR_CNF_MODE_OUTPUT_ALT_OPEN_DRAIN_50MHZ 0b1111
+
+// Size = 16
+typedef struct {
 	uint32_t system_clock;
 	uint32_t ahb_clock;
 	uint32_t apb1_clock;
 	uint32_t apb2_clock;
 } clock_freqs;
 
-typedef struct
-{
+// Size = 9
+typedef struct {
 	uint32_t gpios;
-	uint32_t other_cr_bits; // CNF + MODE, only used if op == GPIO_CFG_OP_OTHER
+	GPIO_CR_CNF_MODE_t other_cr_bits; // CNF + MODE, only used if op == GPIO_CFG_OP_OTHER
 	gpio_operation_t op;
 } gpio_cfg;
 
-typedef struct
-{
+// Size = 4
+typedef struct {
 	filtered_adc_val_t knobs[N_KNOBS];
 	filtered_adc_val_t pads[N_PADS];
 } filtered_analog_inputs;
 
-typedef struct
-{
+// Size = 5
+typedef struct {
 	midi_pending_t pending;
 	midi_cmd_msb_t cmd_msb;
 	uint8_t cmd;
@@ -215,8 +266,8 @@ typedef struct
 } pending_midi;
 
 // These appear to be updated on on-push and on-release events only
-typedef struct
-{
+// Size = 5
+typedef struct {
 	pad_toggled_t pad_toggled;
 	pad_toggled_t cc_toggled;
 	pad_state_t prog_chng; // offset: 2
@@ -224,16 +275,16 @@ typedef struct
 	pad_state_t cc;	       // offset: 4
 } pad_states;
 
-typedef struct
-{
+// Size = 4
+typedef struct {
 	uint8_t note;
 	uint8_t pc;
 	uint8_t cc;
 	push_setting_t type;
 } pad_settings;
 
-typedef struct
-{
+// Size = 6
+typedef struct {
 	pad_confirmed_t last_confirmed_state;
 	uint8_t press_incr;
 	uint8_t rel_decr;
@@ -241,28 +292,28 @@ typedef struct
 	uint16_t adc_eval;
 } pad_handling_data;
 
-typedef struct
-{
+// Size = 3
+typedef struct {
 	uint8_t cc;
 	uint8_t leftmost;
 	uint8_t rightmost;
 } knob_settings;
 
-typedef struct
-{
+// Size = 57
+typedef struct {
 	uint8_t midi_ch;
 	pad_settings pads[N_PADS];
 	knob_settings knobs[N_KNOBS];
 } program_settings;
 
 /**
- * @ 0x08004e7c, Called by IVT Entry @ 0x0800203c
+ * @ 0x08004e7c, Called by Firmware IVT Entry @ 0x0800203c
  * Progress: DONE
  */
-void SysTick_Handler(void)
+void ISR_FW_SysTick_Handler(void)
 {
-	uint8_t *systick_decr_0 = UINT8_SYSTICK_DECREMENTER_0_0x20000018;
-	uint8_t *systick_decr_1 = UINT8_SYSTICK_DECREMENTER_1_0x2000003c;
+	uint8_t *systick_decr_0 = UINT8_PTR_SYSTICK_DECREMENTER_0_0x20000018;
+	uint8_t *systick_decr_1 = UINT8_PTR_SYSTICK_DECREMENTER_1_0x2000003c;
 
 	if (*systick_decr_0 != 0)
 		*systick_decr_0 = *systick_decr_0 - 1;
@@ -276,11 +327,21 @@ void SysTick_Handler(void)
  * Progress: ALMOST DONE
  * TODO: Make inline with two params
  */
-void nvic_init_vector_table(void)
+void nvic_init_firmware_VTOR(void)
 {
-	const uint32_t base = UINT32_NVIC_VETOR_TABLE_BASE;
-	const uint32_t offset = UINT32_NVIC_VECTOR_TABLE_OFFSET;
-	SCB->VTOR = base | (offset & UINT32_NVIC_VECTOR_TABLE_OFFSET_MASK);
+	const uint32_t base = UINT32_PTR_NVIC_VETOR_TABLE_BASE;
+	const uint32_t offset = NVIC_FIRMWARE_VECTOR_TABLE_OFFSET;
+	SCB->VTOR = base | (offset & UINT32_PTR_NVIC_FIRMWARE_VECTOR_TABLE_OFFSET_MASK);
+}
+
+/**
+ * @ 0x08004094
+ * Status: ALMOST DONE / AWAITING MORE INFO
+ * TODO: Confirm if SetPriority is indeed the correct function
+ */
+inline void _NVIC_SetPriority(IRQn_Type IRQn, uint32_t priority)
+{
+	NVIC_SetPriority(IRQn, priority);
 }
 
 /**
@@ -311,8 +372,7 @@ void SYSTICK_set_TICKINT(bool enable)
  */
 void SYSTICK_action(set_SYSTICK_param_t action)
 {
-	switch (action)
-	{
+	switch (action) {
 	case SYSTICK_ENABLE:
 		SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
 		break;
@@ -326,8 +386,42 @@ void SYSTICK_action(set_SYSTICK_param_t action)
 }
 
 /**
+ * @0x080044ec
+ * Progress: DONE
+ */
+void RCC_set_APB2ENR(uint32_t msk, bool set)
+{
+	if (set)
+		RCC->APB2ENR |= msk;
+	else
+		RCC->APB2ENR &= ~msk;
+}
+
+/**
+ * @0x08004108
+ * Progress: DONE
+ */
+void AIRCR_set(uint32_t msk)
+{
+	SCB->AIRCR = SCB_AIRCR_VECTKEY_Msk | msk;
+}
+
+/**
+ * @0x08005160
+ * Progress: DONE
+ */
+void USB_FS_PU_set(bool set)
+{
+	if (set)
+		GPIOA->BSRR = GPIO_BSRR_BS8;
+	else
+		GPIOA->BRR = GPIO_BRR_BR8;
+}
+
+
+/**
  * @ 0x08004558
- * PROGRESS: DONE
+ * Progress: DONE
  * See P.99, Section 7.3 - RCC Register in RM0008
  */
 void RCC_get_clock_freqs(clock_freqs *cfreqs)
@@ -340,8 +434,7 @@ void RCC_get_clock_freqs(clock_freqs *cfreqs)
 	 * (i.e. it does not shift them to the LSB), hence the
 	 * akward shifts by two in the case statements */
 
-	switch (SWS)
-	{
+	switch (SWS) {
 	// High Speed External Clock
 	case (SWS_HSE << 2):
 		cfreqs->system_clock = HSE_VALUE;
@@ -371,7 +464,7 @@ void RCC_get_clock_freqs(clock_freqs *cfreqs)
 		break;
 	}
 
-	const uint8_t *div_shifts = CONST_UINT8_PRE_HPRE_TO_RSHFT_080056DC;
+	const uint8_t *div_shifts = CONST_UINT8_PTR_PRE_HPRE_TO_RSHFT_080056DC;
 
 	//// AHB Frequency
 	const uint32_t HPRE = RCC->CFGR & RCC_CFGR_HPRE;
@@ -403,12 +496,504 @@ void init_SYSTICK(void)
 }
 
 /**
+ * @ 0x080051a0
+ * Progress: INCOMPLETE
+ * TODO: Resolve unknowns
+*/
+void init_usb(void)
+{
+	RCC_set_USBPRE_BB(true);
+	RCC_set_APB2ENR(1 << 23, true); // Reserved according to datasheet?!
+	AIRCR_set(SCB_AIRCR_PRIGROUP_Msk); // Only use subpriorities and no group priorities
+	_NVIC_SetPriority(20, 0); // Set RCC Global Interrupt to priority 0?
+	RCC_set_APB2ENR(RCC_APB2ENR_IOPAEN, true); // Enable GPIOA clock
+
+	// Set USB Full Speed Pull-Up toggle pin to output
+	const gpio_cfg cfg = {
+		.gpios = GPIOA_USB_FULL_SPEED_PU,
+		.op = GPIO_CFG_OP_OTHER,
+		.other_cr_bits = GPIO_CR_CNF_MODE_OUTPUT_PUSH_PULL_2MHZ
+	};
+	GPIOs_cfg(GPIOA, &cfg);
+
+	uint32_t *unknown_1 = UINT32_PTR_UNKNOWN_0x2000004D;
+	uint32_t *unknown_2 = UINT32_PTR_PTR_UNKNOWN_0x20000098;
+	uint32_t ***unknown_3 = UNKNOWN_PTR_PTR_PTR_0x2000009C;
+	uint32_t *unknown_4 = UNKNOWN_PTR_0x200000A0;
+
+	*unknown_1 = 2;
+	*unknown_2 = UINT32_PTR_UNKNOWN_200005BC;
+	*unknown_3 = UNKNOWN_PTR_PTR_200000E8; // Callback function?
+	*unknown_4 = UINT32_PTR_UNKNOWN_0x20000118;
+
+	// (**unknown_3)(); jumps to 0x80050d0
+}
+
+/**
+ * @ 0x80050d0
+ * Progress: INCOMPLETE
+ */
+void UndefinedFunction_80050d0(void)
+{
+	// undefined4 *puVar1;
+	// int *piVar2;
+	// int iVar3;
+
+	// init_USB_per();
+	// piVar2 = UINT32_PTR_PTR_UNKNOWN_0x20000098;
+	// iVar3 = *UINT32_PTR_PTR_UNKNOWN_0x20000098;
+	// *(undefined *)(iVar3 + 8) = *(undefined *)(DAT_08005104 + 7);
+	// *(undefined *)(iVar3 + 9) = 0;
+	// *(undefined *)(iVar3 + 10) = 0;
+	// *DAT_0800510c = 0xbf00;
+	// puVar1 = DAT_08005110;
+	// *DAT_08005110 = 0xbf00;
+	// puVar1[1] = 0;
+	// while (*(char *)(*piVar2 + 9) == '\0') {
+	// 	piVar2 = (int *)FUN_08004092();
+	// }
+	// return;
+
+	init_USB_per();
+
+	uint32_t *unknown_1 = UINT32_PTR_PTR_UNKNOWN_0x20000098;
+	uint32_t *unknown_2 = *unknown_1; // 0x200005bc
+
+	// Some Struct
+	uint8_t *unknown_3 = *unknown_1 + 8;
+	uint8_t *unknown_4 = *unknown_1 + 9;
+	uint8_t *unknown_5 = *unknown_1 + 10;
+
+	// Some String
+	char* unknown_6 = CONST_CHAR_PTR_UNKNOWN_0x8005871;
+	*unknown_3 = unknown_6;
+
+	uint32_t *init_USB_CNTR = UINT32_PTR_USB_CNTR_MASK_0x20000094;
+	// TODO Check if different
+	*init_USB_CNTR = USB_CNTR_ESOFM
+	                 | USB_CNTR_SOFM
+	                 | USB_CNTR_RESETM
+	                 | USB_CNTR_SUSPM
+	                 | USB_CNTR_WKUPM
+	                 | USB_CNTR_ERRM
+	                 | USB_CNTR_CTRM;
+
+	USB->CNTR = *init_USB_CNTR;
+	USB->ISTR = 0;
+
+	/* Likely raised by some USB interrupt
+	   upon successful USB initialization */
+	while (*unknown_4 == 0)
+		nop2();
+}
+
+
+/**
+ * @ 0x80044ac
+ * Progress: DONE
+ */
+uint32_t init_USB_per(void)
+{
+	uint32_t *init_USB_CNTR = UINT32_PTR_USB_CNTR_MASK_0x20000094;
+
+	USB->CNTR = USB_CNTR_FRES; // Power up and reset USB peripheral
+	USB->ISTR = 0; // Clear interrupt status register
+
+	// Configure USB interrupts
+	*init_USB_CNTR = USB_CNTR_ESOFM
+	                 | USB_CNTR_SOFM
+	                 | USB_CNTR_RESETM
+	                 | USB_CNTR_SUSPM
+	                 | USB_CNTR_WKUPM
+	                 | USB_CNTR_ERRM
+	                 | USB_CNTR_CTRM;
+
+	USB->CNTR = *init_USB_CNTR;
+
+	// Toggle USB Full Speed Pull-Up high (this will notify the host about the device)
+	USB_FS_PU_set(true);
+
+	return 0;
+}
+
+/**
+ * @ 0x08004090
+ * Progress: DONE
+ */
+void nop1(void)
+{
+	return;
+}
+
+/**
+ * @ 0x08004092
+ * Progress: DONE
+ */
+void nop2(void)
+{
+	return;
+}
+
+/**
+ * @ 0x08001abc
+ * Progress: DONE
+ * Called by Bootloader IVT Entry @ 0x0800008C
+ */
+void ISR_BL_USB_HP(void)
+{
+	FUN_08001b6c();
+	return;
+}
+
+/**
+ * @ 0x08001bc8
+ * Progress: DONE
+ * Called by Bootloader IVT Entry @ 0x08000090
+ */
+void ISR_BL_USB_LP_ISR(void)
+{
+	FUN_08001b6c();
+	return;
+}
+
+/**
+ * @ 0x08005178
+ * Progress: DONE
+ * Called by Firmware IVT Entry @ 0x0800208C
+ */
+void ISR_FW_USB_HP_ISR(void)
+{
+	USB_handler();
+	return;
+}
+
+/**
+ * @ 0x0080052e0
+ * Progress: DONE
+ * Called by Firmware IVT Entry @ 0x08002090
+ */
+void ISR_FW_USB_LP_ISR(void)
+{
+	USB_handler();
+	return;
+}
+
+/**
+ * @ 0x08005228
+ * Progress: ALMOST DONE / AWAITING MORE INFO
+ * Firmware USB Interrupt Handler
+ * Notes: USB->ISTR can be overwritten since it ignores 1's.
+ * 	  This allows for atomic operations on the register.
+ * TODO: Decompile called functions
+ */
+
+void USB_handler(void)
+{
+	uint16_t *sof_counter = UINT16_PTR_USB_SOF_COUNTER_0x2000004C;
+	uint16_t *usb_istr_cpy = UINT16_PTR_USB_ISTR_CPY_0x20000056;
+	uint32_t *init_usb_cntr = UINT32_PTR_USB_CNTR_MASK_0x20000094;
+
+	*usb_istr_cpy = USB->ISTR;
+	const uint16_t relevant_istr = *usb_istr_cpy & *init_usb_cntr;
+
+	// Reset Request
+	if (relevant_istr & USB_ISTR_RESET) {
+		USB->ISTR = ~(USB_ISTR_RESET);
+		// (**(code **)(FPTR_PTR_FW_USB_RESET_CALLBACK_200000EC))();
+		fptr f_ptr = (fptr)(*(uint32_t *)(FPTR_PTR_FW_USB_RESET_CALLBACK_200000EC)); // Jumps to 0x8005019 (USB_RESET_callback)
+	}
+
+	// Error
+	if (relevant_istr & USB_ISTR_ERR) {
+		USB->ISTR = ~(USB_ISTR_ERR);
+	}
+
+	// Wakeup
+	if (relevant_istr & USB_ISTR_WKUP) {
+		USB->ISTR = ~(USB_ISTR_WKUP);
+		FUN_08004784(0);
+	}
+
+	// Suspend mode request
+	if (relevant_istr & USB_ISTR_SUSP) {
+		FUN_08004cdc();
+		USB->ISTR = ~(USB_ISTR_SUSP);
+	}
+
+	// Start-Of-Frame (Sent every 1ms)
+	if (relevant_istr & USB_ISTR_SOF) {
+		USB->ISTR = ~(USB_ISTR_SOF);
+		*sof_counter++;
+	}
+
+	// Expected Start-Of-Frame
+	if (relevant_istr & USB_ISTR_ESOF) {
+		USB->ISTR = ~(USB_ISTR_ESOF);
+		FUN_08004784(7);
+	}
+
+	// Correct Transfer
+	if (relevant_istr & USB_ISTR_CTR) {
+		FUN_080025ac();
+	}
+}
+
+/**
+ * @ 0x0800483c
+ * Progress: DONE
+ * Description: Sets the buffer table address.
+ * 		Last 3 bits zeroed to ensure 8-byte
+ * 		alignment.
+ */
+void USB_BTABLE_set(uint32_t addr)
+{
+	USB->BTABLE = addr & 0xfffffff8;
+	return;
+}
+
+/**
+ * @ 0x0800498c
+ * Progress: DONE
+ * Description: Applies the mask to the selected
+ * 		endpoint register
+ * Note: The STAT_TX, DTOG_TX, EP_TYPE, STAT_RX and DTOG_RX bits
+ * 	 are cleared before the mask is applied.
+ */
+void USB_set_EPR(uint32_t epid, uint32_t msk)
+{
+	uint32_t *USB_EPR = USB_BASE + (epid * 4); // EPR's are 4 bytes wide
+	*USB_EPR &= ~(USB_EP0R_STAT_TX // Macro hints at EP0R, but can be used for any EP
+	              | USB_EP_DTOG_TX
+	              | USB_EP0R_EP_TYPE
+	              | USB_EP0R_STAT_RX
+	              | USB_EP_DTOG_RX
+	             );
+
+	*USB_EPR |= msk;
+}
+
+/**
+ * @ 0x08004960
+ * Progress: DONE
+ * Description: Toggles the STAT_TX bits of the selected
+ * 		endpoint register
+ * Note: DTOG_TX, STAT_RX and DTOG_RX bits are cleared before toggling
+ * Note: The provided mask must correspond to the EPR register
+ * Note: See datasheet for more info on STAT_TX bits and toggling
+ */
+void USB_toggle_STAT_TX(uint32_t epid, uint32_t toggle_msk)
+{
+	uint32_t *USB_EPR = USB_BASE + (epid * 4); // EPR's are 4 bytes wide
+	uint32_t mut = *USB_EPR & ~(USB_EP_DTOG_TX
+	                            | USB_EP0R_STAT_RX
+	                            | USB_EP_DTOG_RX);
+
+	if (toggle_msk & (1 << 4))
+		mut ^= USB_EP0R_STAT_TX_0;
+
+	if (toggle_msk & (1 << 5))
+		mut ^= USB_EP0R_STAT_TX_1;
+
+	*USB_EPR = mut;
+}
+
+
+/**
+ * @ 0x08004894
+ * Progress: DONE
+ * Description: Sets the reception buffer address for the selected endpoint
+ * Note: Due to APB bridge limitations, the datasheet
+ * 	 demands that the BTABLE is accessed by multiplying
+ * 	 the "USB local address" by 2. Their wording regarding this is
+ * 	 incredibly unspecific and there seems to be no clarification
+ * 	 if the BTABLE address must also be multiplied by 2. The provided
+ * 	 address equations in the datasheet do not seem to explicitly
+ * 	 indicate this, however, since the LPD8 firmware does do this, I
+ * 	 simply must assume that multiplying the BTABLE address by 2 is
+ * 	 in fact correct.
+ */
+void USB_set_ADDR_RX(uint32_t epid, uint32_t addr)
+{
+	const uint16_t BTABLE_ADDR = USB->BTABLE;
+	const uint32_t USB_ADDR_RX_offset_local = BTABLE_ADDR + (epid * 8) + 4;
+	const uint32_t USB_ADDR_RX_offset = USB_ADDR_RX_offset_local * 2; // See 23.5.3 in RM0008
+
+	uint32_t *USB_ADDR_RX = USB_PMAADDR + USB_ADDR_RX_offset;
+
+	*USB_ADDR_RX = addr & 0xfffffffe;
+}
+
+
+/**
+ * @ 0x08005018
+ * Progress: Incomplete
+ */
+void USB_RESET_callback(void)
+{
+	// int iVar1;
+
+	// iVar1 = *UINT32_PTR_PTR_UNKNOWN_0x20000098;
+	// *(undefined *)(iVar1 + 9) = 0;
+	// *(undefined *)(iVar1 + 10) = 0;
+	// USB_BTABLE_set(0);
+	// USB_set_EPR(0,0x200);
+	// USB_toggle_STAT_TX(0,0x10);
+	// USB_set_ADDR_RX(0,0x40);
+	// FUN_08004924(0,0x50);
+	// FUN_08002774(0);
+	// FUN_080048b4(0,0x10);
+	// FUN_080048f8(0,0x3000);
+	// USB_set_EPR(1,0);
+	// FUN_08004924(1,0xa0);
+	// FUN_08004944(1,0x40);
+	// USB_toggle_STAT_TX(1,0x30);
+	// USB_set_ADDR_RX(1,0x60);
+	// FUN_08002774(1);
+	// FUN_080048b4(1,0x40);
+	// FUN_080048f8(1,0x3000);
+	// FUN_08004858(0);
+	// return;
+
+	uint32_t unknown_struct_base = *(uint32_t *)UINT32_PTR_PTR_UNKNOWN_0x20000098;
+	uint8_t *unknown_struct_element_1 = *(uint8_t *)(unknown_struct_base + 9);
+	uint8_t *unknown_struct_element_2 = *(uint8_t *)(unknown_struct_base + 10);
+
+	*unknown_struct_element_1 = 0;
+	*unknown_struct_element_2 = 0;
+
+	USB_BTABLE_set(0);
+	USB_set_EPR(0,0x200);
+	USB_toggle_STAT_TX(0,0x10);
+	USB_set_ADDR_RX(0,0x40);
+	FUN_08004924(0,0x50);
+	FUN_08002774(0);
+	FUN_080048b4(0,0x10);
+	FUN_080048f8(0,0x3000);
+	USB_set_EPR(1,0);
+	FUN_08004924(1,0xa0);
+	FUN_08004944(1,0x40);
+	USB_toggle_STAT_TX(1,0x30);
+	USB_set_ADDR_RX(1,0x60);
+	FUN_08002774(1);
+	FUN_080048b4(1,0x40);
+	FUN_080048f8(1,0x3000);
+	FUN_08004858(0);
+}
+
+/**
+ * @ 0x08001b6c
+ * Progress: INCOMPLETE
+ * Bootloader USB Interrupt Handler
+ */
+void FUN_08001b6c(void)
+{
+	// ushort uVar1;
+	// ushort *puVar2;
+	// int midi_buf_tail;
+	// int usb_istr_minus_0xc44;
+
+	// midi_buf_tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c;
+	// usb_istr_minus_0xc44 = UART5;
+	// *(short *)(unknown_1) = (short)*(undefined4 *)(USB->ISTR);
+	// puVar2 = UINT16_PTR_UNKNOWN_0x20000054;
+	// if ((int)((uint)(*(ushort *)(unknown_1) & *UINT16_PTR_UNKNOWN_0x20000054) << 0x15) < 0) {
+	// 	*(undefined4 *)(USB->ISTR) = 0xfbff;
+	// 	(**(code **)(DAT_08001bc4 + 4))();
+	// }
+	// uVar1 = *puVar2;
+	// if ((int)((uint)(*(ushort *)(unknown_1) & uVar1) << 0x12) < 0) {
+	// 	*(undefined4 *)(USB->ISTR) = 0xdfff;
+	// }
+	// if ((int)((uint)(*(ushort *)(unknown_1) & uVar1) << 0x10) < 0) {
+	// 	FUN_080002c0();
+	// 	return;
+	// }
+	// return;
+
+	uint16_t *unknown_1 = UNKNOWN_PTR_0x20000014;
+	uint16_t *unknown_2 = UINT16_PTR_UNKNOWN_0x20000054;
+
+	*unknown_1 = USB->ISTR;
+	if ((*unknown_1 & *unknown_2) << 0x15 < 0) {
+		USB->ISTR = 0xfbff;
+		// (**(code **)(DAT_08001bc4 + 4))();
+	}
+
+	if ((*unknown_1 & *unknown_2) << 0x12 < 0) {
+		USB->ISTR = 0xdfff;
+	}
+
+	if ((*unknown_1 & *unknown_2) << 0x10 < 0) {
+		FUN_080002c0();
+	}
+}
+
+/**
+ * @0x08004338
+ * Progress: ALMOST DONE / AWAITING MORE INFO
+ * TODO: Confirm USB Full Speed resistor pull down
+ */
+void init_GPIOs()
+{
+	RCC_set_APB2ENR(RCC_APB2ENR_IOPAEN, true);
+	RCC_set_APB2ENR(RCC_APB2ENR_IOPBEN, true);
+	RCC_set_APB2ENR(RCC_APB2ENR_IOPCEN, true);
+
+	// Set unused GPIOs to input with pull-up
+	const uint32_t GPIO_10TO15_MSK = 0xFC00;
+	const gpio_cfg cfg = {
+		.gpios = GPIO_10TO15_MSK,
+		.op = GPIO_CFG_OP_IN_PU
+	};
+	GPIOs_cfg(GPIOC, &cfg);
+
+	// Set Push Button GPIOs to input with pull-up
+	const uint32_t GPIO_6TO9_MSK = 0x03C0;
+	const gpio_cfg cfg = {
+		.gpios = GPIO_6TO9_MSK,
+		.op = GPIO_CFG_OP_IN_PU
+	};
+	GPIOs_cfg(GPIOC, &cfg);
+
+	// Set LED GPIOs to 2Mhz push pull output
+	const uint32_t GPIO_5TO15_MSK = 0xFFE0;
+	const gpio_cfg cfg = {
+		.gpios = GPIO_5TO15_MSK,
+		.other_cr_bits = GPIO_CR_CNF_MODE_OUTPUT_PUSH_PULL_2MHZ,
+		.op = GPIO_CFG_OP_OTHER
+	};
+	GPIOs_cfg(GPIOB, &cfg);
+
+	// Set USB Full Speed resistor to pull down
+	const gpio_cfg cfg = {
+		.gpios = GPIOA_USB_FULL_SPEED_PU,
+		.other_cr_bits = GPIO_CR_CNF_MODE_OUTPUT_PUSH_PULL_2MHZ,
+		.op = GPIO_CFG_OP_OTHER
+	};
+	GPIOs_cfg(GPIOA, &cfg);
+	USB_FS_PU_set(false);
+
+	// Set all LEDs to OFF
+	LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PAD_GPIO);
+	LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
+	LED_GPIO_PORT->ODR &= ~(1 << LED_PB_CC_GPIO);
+	LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_1_GPIO);
+	LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_2_GPIO);
+	LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_3_GPIO);
+	LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_4_GPIO);
+	LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_5_GPIO);
+	LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_6_GPIO);
+	LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_7_GPIO);
+	LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_8_GPIO);
+}
+
+/**
  * @ 0x08005670
  * Progress: DONE
  */
 void init_midi_buffer(void)
 {
-	uint8_t *remaining_space = UINT8_MIDI_BUFFER_REMAINING_SPACE_0x20000004;
+	uint8_t *remaining_space = UINT8_PTR_MIDI_BUFFER_REMAINING_SPACE_0x20000004;
 	uint8_t **tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c;
 	uint8_t **head = UINT8_PTR_PTR_MIDI_BUFFER_HEAD_0x20000008;
 
@@ -625,79 +1210,78 @@ void DMA_clear_IFCR(uint32_t *dma_ccr)
 	*dma_cpar = 0;
 	*dma_cmar = 0;
 
-	switch ((uintptr_t)dma_ccr)
-	{
+	switch ((uintptr_t)dma_ccr) {
 	case DMA1_Channel1_BASE:
 		DMA1->IFCR |= DMA_IFCR_CGIF1 |
-			      DMA_IFCR_CHTIF1 |
-			      DMA_IFCR_CTCIF1 |
-			      DMA_IFCR_CTEIF1;
+		              DMA_IFCR_CHTIF1 |
+		              DMA_IFCR_CTCIF1 |
+		              DMA_IFCR_CTEIF1;
 		break;
 	case DMA1_Channel2_BASE:
 		DMA1->IFCR |= DMA_IFCR_CGIF2 |
-			      DMA_IFCR_CHTIF2 |
-			      DMA_IFCR_CTCIF2 |
-			      DMA_IFCR_CTEIF2;
+		              DMA_IFCR_CHTIF2 |
+		              DMA_IFCR_CTCIF2 |
+		              DMA_IFCR_CTEIF2;
 		break;
 	case DMA1_Channel3_BASE:
 		DMA1->IFCR |= DMA_IFCR_CGIF3 |
-			      DMA_IFCR_CHTIF3 |
-			      DMA_IFCR_CTCIF3 |
-			      DMA_IFCR_CTEIF3;
+		              DMA_IFCR_CHTIF3 |
+		              DMA_IFCR_CTCIF3 |
+		              DMA_IFCR_CTEIF3;
 		break;
 	case DMA1_Channel4_BASE:
 		DMA1->IFCR |= DMA_IFCR_CGIF4 |
-			      DMA_IFCR_CHTIF4 |
-			      DMA_IFCR_CTCIF4 |
-			      DMA_IFCR_CTEIF4;
+		              DMA_IFCR_CHTIF4 |
+		              DMA_IFCR_CTCIF4 |
+		              DMA_IFCR_CTEIF4;
 		break;
 	case DMA1_Channel5_BASE:
 		DMA1->IFCR |= DMA_IFCR_CGIF5 |
-			      DMA_IFCR_CHTIF5 |
-			      DMA_IFCR_CTCIF5 |
-			      DMA_IFCR_CTEIF5;
+		              DMA_IFCR_CHTIF5 |
+		              DMA_IFCR_CTCIF5 |
+		              DMA_IFCR_CTEIF5;
 		break;
 	case DMA1_Channel6_BASE:
 		DMA1->IFCR |= DMA_IFCR_CGIF6 |
-			      DMA_IFCR_CHTIF6 |
-			      DMA_IFCR_CTCIF6 |
-			      DMA_IFCR_CTEIF6;
+		              DMA_IFCR_CHTIF6 |
+		              DMA_IFCR_CTCIF6 |
+		              DMA_IFCR_CTEIF6;
 		break;
 	case DMA1_Channel7_BASE:
 		DMA1->IFCR |= DMA_IFCR_CGIF7 |
-			      DMA_IFCR_CHTIF7 |
-			      DMA_IFCR_CTCIF7 |
-			      DMA_IFCR_CTEIF7;
+		              DMA_IFCR_CHTIF7 |
+		              DMA_IFCR_CTCIF7 |
+		              DMA_IFCR_CTEIF7;
 		break;
 	case DMA2_Channel1_BASE:
 		DMA2->IFCR |= DMA_IFCR_CGIF1 |
-			      DMA_IFCR_CHTIF1 |
-			      DMA_IFCR_CTCIF1 |
-			      DMA_IFCR_CTEIF1;
+		              DMA_IFCR_CHTIF1 |
+		              DMA_IFCR_CTCIF1 |
+		              DMA_IFCR_CTEIF1;
 		break;
 	case DMA2_Channel2_BASE:
 		DMA2->IFCR |= DMA_IFCR_CGIF2 |
-			      DMA_IFCR_CHTIF2 |
-			      DMA_IFCR_CTCIF2 |
-			      DMA_IFCR_CTEIF2;
+		              DMA_IFCR_CHTIF2 |
+		              DMA_IFCR_CTCIF2 |
+		              DMA_IFCR_CTEIF2;
 		break;
 	case DMA2_Channel3_BASE:
 		DMA2->IFCR |= DMA_IFCR_CGIF3 |
-			      DMA_IFCR_CHTIF3 |
-			      DMA_IFCR_CTCIF3 |
-			      DMA_IFCR_CTEIF3;
+		              DMA_IFCR_CHTIF3 |
+		              DMA_IFCR_CTCIF3 |
+		              DMA_IFCR_CTEIF3;
 		break;
 	case DMA2_Channel4_BASE:
 		DMA2->IFCR |= DMA_IFCR_CGIF4 |
-			      DMA_IFCR_CHTIF4 |
-			      DMA_IFCR_CTCIF4 |
-			      DMA_IFCR_CTEIF4;
+		              DMA_IFCR_CHTIF4 |
+		              DMA_IFCR_CTCIF4 |
+		              DMA_IFCR_CTEIF4;
 		break;
 	case DMA2_Channel5_BASE:
 		DMA2->IFCR |= DMA_IFCR_CGIF5 |
-			      DMA_IFCR_CHTIF5 |
-			      DMA_IFCR_CTCIF5 |
-			      DMA_IFCR_CTEIF5;
+		              DMA_IFCR_CHTIF5 |
+		              DMA_IFCR_CTCIF5 |
+		              DMA_IFCR_CTEIF5;
 		break;
 	default:
 		break;
@@ -806,29 +1390,21 @@ void ADC_set_SMPR_SQR(uint32_t adc_base, uint8_t channel, uint8_t nth_conv, uint
 	uint32_t *ADC_SQR2 = adc_base + ADC_SQR2_OFFSET;
 	uint32_t *ADC_SQR3 = adc_base + ADC_SQR3_OFFSET;
 
-	if (channel < 10)
-	{
+	if (channel < 10) {
 		*ADC_SMPR2 &= ~(ADC_SMPR2_SMP0 << (channel * 3));
 		*ADC_SMPR2 |= smp_bits << (channel * 3);
-	}
-	else
-	{
+	} else {
 		*ADC_SMPR1 &= ~(ADC_SMPR1_SMP10 << ((channel - 10) * 3));
 		*ADC_SMPR1 |= smp_bits << ((channel - 10) * 3);
 	}
 
-	if (nth_conv < 7)
-	{
+	if (nth_conv < 7) {
 		*ADC_SQR3 &= ~(ADC_SQR3_SQ1 << ((nth_conv - 1) * 5));
 		*ADC_SQR3 |= channel << ((nth_conv - 1) * 5);
-	}
-	else if (nth_conv < 13)
-	{
+	} else if (nth_conv < 13) {
 		*ADC_SQR2 &= ~(ADC_SQR2_SQ7 << ((nth_conv - 7) * 5));
 		*ADC_SQR2 |= channel << ((nth_conv - 7) * 5);
-	}
-	else
-	{
+	} else {
 		*ADC_SQR1 &= ~(ADC_SQR1_SQ13 << ((nth_conv - 0xd) * 5));
 		*ADC_SQR1 |= channel << ((nth_conv - 0xd) * 5);
 	}
@@ -850,29 +1426,32 @@ void init_analog(void)
 
 	// Knobs 1-8
 	const uint32_t GPIO_0TO7_MSK = 0xFF;
-	GPIOs_cfg(GPIOA, &(gpio_cfg){
-			     GPIO_0TO7_MSK, 0, GPIO_CFG_OP_IN_ANALOG});
+	GPIOs_cfg(GPIOA, &(gpio_cfg) {
+		GPIO_0TO7_MSK, 0, GPIO_CFG_OP_IN_ANALOG
+	});
 
 	// Pads 1-2
 	const uint32_t GPIO_0TO3_MSK = 0x0F;
-	GPIOs_cfg(GPIOB, &(gpio_cfg){
-			     GPIO_0TO3_MSK, 0, GPIO_CFG_OP_IN_ANALOG});
+	GPIOs_cfg(GPIOB, &(gpio_cfg) {
+		GPIO_0TO3_MSK, 0, GPIO_CFG_OP_IN_ANALOG
+	});
 
 	// TODO: Pads 2-3 Missing??
 
 	// Pads 5-8
 	const uint32_t GPIO_2TO5_MSK = 0x3C;
-	GPIOs_cfg(GPIOC, &(gpio_cfg){
-			     GPIO_2TO5_MSK, 0, GPIO_CFG_OP_IN_ANALOG});
+	GPIOs_cfg(GPIOC, &(gpio_cfg) {
+		GPIO_2TO5_MSK, 0, GPIO_CFG_OP_IN_ANALOG
+	});
 
 	RCC_set_AHBENR(1 << RCC_AHBENR_DMA1EN, true);
 	RCC_set_APB2ENR(1 << RCC_APB2ENR_ADC1EN, true);
 
-	DMA_CLEAR_IFCR(DMA1_Channel1_BASE);
+	DMA_clear_IFCR(DMA1_Channel1_BASE);
 	DMA_set_CPAR_CMAR_DIR_CNDTR_PINC_MINC_PSIZE_MSIZE_CIRC_PL_MEM2MEM(
 	    DMA1_Channel1_BASE,
 	    ADC1->DR,
-	    UINT16_16_DMA1_MEM_0x2000013C,
+	    UINT16_16_PTR_DMA1_MEM_0x2000013C,
 	    0x0,
 	    DMA1_NUM_DATA,
 	    0x0,
@@ -971,16 +1550,13 @@ void GPIOs_cfg(uint32_t *gpio_base, gpio_cfg *gpio_cfg)
 		cnf_mode_bits |= gpio_cfg->other_cr_bits;
 
 	// Configure GPIO's 0-7, if any of them must be configured
-	if (gpio_cfg->gpios & 0xFF)
-	{
+	if (gpio_cfg->gpios & 0xFF) {
 		uint32_t crl = *GPIO_CRL;
 
-		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++)
-		{
+		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++) {
 			uint8_t msk = 1 << i_gpio;
 
-			if (gpio_cfg->gpios & msk)
-			{
+			if (gpio_cfg->gpios & msk) {
 				crl &= ~(GPIO_CR_CNF_MODE << (i_gpio * 4));
 				crl |= cnf_mode_bits << (i_gpio * 4);
 
@@ -994,16 +1570,13 @@ void GPIOs_cfg(uint32_t *gpio_base, gpio_cfg *gpio_cfg)
 	}
 
 	// Same logic as above, but for GPIO's 8-15
-	if (gpio_cfg->gpios > 0xFF)
-	{
+	if (gpio_cfg->gpios > 0xFF) {
 		uint32_t crh = *GPIO_CRH;
 
-		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++)
-		{
+		for (uint8_t i_gpio = 0; i_gpio < 8; i_gpio++) {
 			uint8_t msk = 1 << (i_gpio + 8); // + 8 due to GPIO's 8-15
 
-			if (gpio_cfg->gpios & msk)
-			{
+			if (gpio_cfg->gpios & msk) {
 				crh &= ~(GPIO_CR_CNF_MODE << (i_gpio * 4));
 				crh |= cnf_mode_bits << (i_gpio * 4);
 
@@ -1027,19 +1600,17 @@ void write_midi_buffer(void *data, uint32_t size)
 {
 	// TODO: Clarify which pointers are only used for their address
 
-	uint8_t *remaining_space = UINT8_MIDI_BUFFER_REMAINING_SPACE_0x20000004;
-	uint8_t *buffer_end = UINT8_MIDI_BUFFER_END_0x2000024C;
+	uint8_t *remaining_space = UINT8_PTR_MIDI_BUFFER_REMAINING_SPACE_0x20000004;
+	uint8_t *buffer_end_addr = UINT8_PTR_MIDI_BUFFER_END_0x2000024C;
 	uint8_t **head = UINT8_PTR_PTR_MIDI_BUFFER_HEAD_0x20000008;
-	uint8_t **tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c; // buffer_end - MIDI_BUFFER_SIZE
+	uint8_t **tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c; // buffer_end_addr - MIDI_BUFFER_SIZE
 
-	for (uint8_t i = 0; i < size; i++)
-	{
+	for (uint8_t i = 0; i < size; i++) {
 		uint8_t *next_element = *head + 1;
 
-		// When buffer_end is reached, continue buffer
-		// writing at buffer_end - MIDI_BUFFER_SIZE
-		if (next_element == buffer_end)
-		{
+		// When buffer_end_addr is reached, continue buffer
+		// writing at buffer_end_addr - MIDI_BUFFER_SIZE
+		if (next_element == buffer_end_addr) {
 			next_element = *tail; // 0x2000015C
 		}
 
@@ -1052,7 +1623,7 @@ void write_midi_buffer(void *data, uint32_t size)
 		*head = next_element;
 
 		// Move to next byte of data
-		data = data + 1;
+		data++;
 	}
 
 	const uint32_t last_element_addr = *head;
@@ -1065,6 +1636,30 @@ void write_midi_buffer(void *data, uint32_t size)
 }
 
 /**
+ * @ 0x080035bc
+ * Progress: INCOMPLETE
+ */
+// FUN_080035bc(0,puVar5,0x39);
+// FUN_080035bc(0x40,puVar16,0x39);
+// FUN_080035bc(0x80,puVar14,0x39);
+// FUN_080035bc(0xc0,puVar15,0x39);
+uint32_t FUN_080035bc(uint32_t offset, uint8_t *src, uint32_t n)
+{
+	if (offset + n > 0xFF)
+		return 0;
+
+	uint32_t *dest = UINT8_PTR_MIDI_BUFFER_END_0x2000024C + offset;
+
+	for (uint16_t i = 0; i < n; i++) {
+		*dest = *src;
+		src++;
+		dest++;
+	}
+
+	return 1;
+}
+
+/**
  * @ 0x08003b10
  * Progress: ALMOST DONE / AWAITING MORE INFO
  * TODO: Confirm purpose of ready flag,
@@ -1073,34 +1668,33 @@ void write_midi_buffer(void *data, uint32_t size)
  */
 void eval_knobs(void)
 {
-	const uint8_t systick_decr_0 = *(uint8_t *)UINT8_SYSTICK_DECREMENTER_0_0x20000018;
-	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_0x20000042;
-	program_settings *all_prog_settings = PROGRAM_SETTINGS_5_0x200003CC;
+	const uint8_t systick_decr_0 = *(uint8_t *)UINT8_PTR_SYSTICK_DECREMENTER_0_0x20000018;
+	const uint8_t sel_prog = *(uint8_t *)UINT8_PTR_SELECTED_PROG_0x20000042;
+	program_settings *all_prog_settings = PROGRAM_SETTINGS_5_PTR_0x200003CC;
 	program_settings *sel_prog_settings = &all_prog_settings[sel_prog];
-	bool *scaled_knob_vals_changed = BOOL_8_SCALED_KNOB_VALS_CHANGED_0x20000019;
-	midi_data_t *prev_scaled_knob_vals = UINT8_8_PREV_SCALED_KNOB_VALS_0x20000021;
-	midi_data_t *prev_prev_scaled_knob_vals = UINT8_8_PREV_PREV_SCALED_KNOB_VALS_0x20000029;
-	filtered_adc_val_t *prev_accepted_knob_analog_vals = UINT16_8_PREV_ACCEPTED_KNOB_ANALOG_VALS_0x200004EA;
-	filtered_analog_inputs *filtered_analog_inputs = FILTERED_ANALOG_INPUTS_0x2000059A;
+	bool *scaled_knob_vals_changed = BOOL_8_PTR_SCALED_KNOB_VALS_CHANGED_0x20000019;
+	midi_data_t *prev_scaled_knob_vals = UINT8_8_PTR_PREV_SCALED_KNOB_VALS_0x20000021;
+	midi_data_t *prev_prev_scaled_knob_vals = UINT8_8_PTR_PREV_PREV_SCALED_KNOB_VALS_0x20000029;
+	filtered_adc_val_t *prev_accepted_knob_analog_vals = UINT16_8_PTR_PREV_ACCEPTED_KNOB_ANALOG_VALS_0x200004EA;
+	filtered_analog_inputs *filtered_analog_inputs = FILTERED_ANALOG_INPUTS_PTR_0x2000059A;
 	filtered_adc_val_t *knob_analog_vals = &filtered_analog_inputs->knobs;
-	ready_t *knob_analog_rdy = UINT8_KNOB_ANALOG_VALS_READY_0x20000040;
+	ready_t *knob_analog_rdy = UINT8_PTR_KNOB_ANALOG_VALS_READY_0x20000040;
 
 	/*
 	 * Appears to be reset after intervals of 4 calls
 	 * Probably SysTick related
 	 */
-	if (*ready != READY)
+	if (*knob_analog_rdy != READY)
 		return;
 
-	*ready = NOT_READY;
+	*knob_analog_rdy = NOT_READY;
 
 	// Treat invalid MIDI channels as channel 0 (aka. 1)
 	uint8_t midi_ch = sel_prog_settings->midi_ch;
 	if (midi_ch > MIDI_MAX_CHANNEL)
 		midi_ch = 0;
 
-	for (uint8_t i = 0; i < N_KNOBS; i++)
-	{
+	for (uint8_t i = 0; i < N_KNOBS; i++) {
 		uint8_t knob_cc = sel_prog_settings->knobs[i].cc;
 		uint8_t knob_rightmost = sel_prog_settings->knobs[i].rightmost;
 		uint8_t knob_leftmost = sel_prog_settings->knobs[i].leftmost;
@@ -1119,9 +1713,9 @@ void eval_knobs(void)
 
 		// Only update if knob has been moved beyond threshold
 		if (!EXCEEDS_THRESHOLD(
-			_knob_analog_val,
-			_prev_accepted_knob_analog_val,
-			ADC_KNOB_CHANGE_THRESHOLD))
+		        _knob_analog_val,
+		        _prev_accepted_knob_analog_val,
+		        ADC_KNOB_CHANGE_THRESHOLD))
 			continue;
 
 		/* Scale ADC value to range specified by knob_leftmost and knob_rightmost
@@ -1158,22 +1752,19 @@ void eval_knobs(void)
 
 		uint8_t scaled;
 
-		if (knob_leftmost < knob_rightmost)
-		{
+		if (knob_leftmost < knob_rightmost) {
 			uint8_t range = (knob_rightmost - knob_leftmost) + 1;
 			scaled = knob_leftmost +
-				 (_knob_analog_val * range) /
-				     (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
+			         (_knob_analog_val * range) /
+			         (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
 
 			if (knob_rightmost < scaled)
 				scaled = knob_rightmost;
-		}
-		else
-		{
+		} else {
 			uint8_t range = (knob_rightmost - knob_leftmost) + 1;
 			scaled = knob_leftmost -
-				 (_knob_analog_val * range) /
-				     (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
+			         (_knob_analog_val * range) /
+			         (MAX_ADC_KNOB_VAL - ADC_KNOB_CHANGE_THRESHOLD - 1);
 
 			if (knob_rightmost > knob_leftmost)
 				scaled = knob_rightmost;
@@ -1182,8 +1773,7 @@ void eval_knobs(void)
 		if (scaled > MIDI_MAX_DATA_VAL)
 			scaled = MIDI_MAX_DATA_VAL;
 
-		if (*prev_knob_scaled_val != scaled)
-		{
+		if (*prev_knob_scaled_val != scaled) {
 
 			/*
 			 * Filter "spikes", ie. very short changes in values
@@ -1199,15 +1789,13 @@ void eval_knobs(void)
 			if (*prev_prev_knob_scaled_val == scaled &&
 			    *scaled_knob_val_changed &&
 			    !EXCEEDS_THRESHOLD(
-				_prev_accepted_knob_analog_val,
-				_knob_analog_val,
-				ADC_KNOB_NOISE_GATE))
+			        _prev_accepted_knob_analog_val,
+			        _knob_analog_val,
+			        ADC_KNOB_NOISE_GATE))
 				continue;
 
 			*scaled_knob_val_changed = true;
-		}
-		else
-		{
+		} else {
 			*scaled_knob_val_changed = false;
 		}
 
@@ -1219,16 +1807,16 @@ void eval_knobs(void)
 		 * The SysTick decrementer is likely employed to
 		 * prevent flooding the MIDI buffer.
 		 */
-		if (systick_decr_0 == 0)
-		{
+		if (systick_decr_0 == 0) {
 
 			if (knob_cc > MIDI_MAX_DATA_VAL)
 				knob_cc = MIDI_MAX_DATA_VAL;
 
 			uint8_t data[4] = {
-			    MIDI_CMD_CC_MSB | midi_ch,
-			    knob_cc, scaled,
-			    0x00};
+				MIDI_CMD_CC_MSB | midi_ch,
+				knob_cc, scaled,
+				0x00
+			};
 
 			write_midi_buffer(&data, sizeof(data));
 		}
@@ -1243,12 +1831,12 @@ void eval_knobs(void)
  */
 void read_analog(void)
 {
-	uint16_t *prev_dma1_mem = UINT16_16_PREV_DMA1_MEM_0x2000057A;
-	uint16_t *dma1_mem = UINT16_16_DMA1_MEM_0x2000013C;
-	filtered_adc_val_t *filtered = FILTERED_ANALOG_INPUTS_0x2000059A;
-	uint8_t *store_cntr = UINT8_DMA1_STORE_CNTR_0x2000003d;
-	ready_t *knob_analog_rdy = UINT8_KNOB_ANALOG_VALS_READY_0x20000040;
-	ready_t *pad_analog_rdy = UINT8_PAD_ANALOG_VALS_READY_0x20000041;
+	uint16_t *prev_dma1_mem = UINT16_16_PTR_PREV_DMA1_MEM_0x2000057A;
+	uint16_t *dma1_mem = UINT16_16_PTR_DMA1_MEM_0x2000013C;
+	filtered_adc_val_t *filtered = FILTERED_ANALOG_INPUTS_PTR_0x2000059A;
+	uint8_t *store_cntr = UINT8_PTR_DMA1_STORE_CNTR_0x2000003d;
+	ready_t *knob_analog_rdy = UINT8_PTR_KNOB_ANALOG_VALS_READY_0x20000040;
+	ready_t *pad_analog_rdy = UINT8_PTR_PAD_ANALOG_VALS_READY_0x20000041;
 
 	const bool dma1_tcif1 = DMA_read_ISR(DMA_ISR_TCIF1);
 
@@ -1256,8 +1844,7 @@ void read_analog(void)
 	if (!dma1_tcif1)
 		return;
 
-	for (uint8_t i = 0; i < DMA1_NUM_DATA; i++)
-	{
+	for (uint8_t i = 0; i < DMA1_NUM_DATA; i++) {
 		const uint16_t dma_val = dma1_mem[i];
 
 		/* Dispose top 4 bits since ADC only uses 12 bits
@@ -1277,12 +1864,10 @@ void read_analog(void)
 
 	(*store_cntr)++;
 
-	if (store_cntr >= DMA1_STORE_INTERVAL)
-	{
+	if (store_cntr >= DMA1_STORE_INTERVAL) {
 		*store_cntr = 0;
 
-		for (uint8_t i = 0; i < DMA1_NUM_DATA; i++)
-		{
+		for (uint8_t i = 0; i < DMA1_NUM_DATA; i++) {
 			filtered[i] = prev_dma1_mem[i] >> 4;
 			prev_dma1_mem[i] = 0;
 		}
@@ -1303,17 +1888,17 @@ void read_analog(void)
  */
 void eval_pads(void)
 {
-	const uint8_t sel_prog = *(uint8_t *)UINT8_SELECTED_PROG_0x20000042;
-	const uint8_t *plus_1_max_127 = CONST_UINT8_127_LUT_1TO127_080056E4;
-	const mode_t sel_mode = *(uint8_t *)UINT8_SELECTED_MODE_0x2000003f;
+	const uint8_t sel_prog = *(uint8_t *)UINT8_PTR_SELECTED_PROG_0x20000042;
+	const uint8_t *plus_1_max_127 = CONST_UINT8_127_PTR_LUT_1TO127_080056E4;
+	const mode_t sel_mode = *(uint8_t *)UINT8_PTR_SELECTED_MODE_0x2000003f;
 
-	uint8_t *pad_analog_rdy = UINT8_PAD_ANALOG_VALS_READY_0x20000041;
-	pending_midi *pads_on_release_midi = PENDING_MIDI_8_RELEASE_MIDI_0x2000052a;
-	uint8_t *all_prog_settings = PROGRAM_SETTINGS_5_0x200003CC;
+	uint8_t *pad_analog_rdy = UINT8_PTR_PAD_ANALOG_VALS_READY_0x20000041;
+	pending_midi *pads_on_release_midi = PENDING_MIDI_8_PTR_RELEASE_MIDI_0x2000052a;
+	uint8_t *all_prog_settings = PROGRAM_SETTINGS_5_PTR_0x200003CC;
 	program_settings *sel_prog_settings = &all_prog_settings[sel_prog];
-	pad_states *pads_states = PAD_STATES_8_0x20000552;
-	pad_handling_data *pads_hd = PAD_HANDLING_DATA_8_0x200004FA;
-	filtered_analog_inputs *filtered_analog_inputs = FILTERED_ANALOG_INPUTS_0x2000059A;
+	pad_states *pads_states = PAD_STATES_8_PTR_0x20000552;
+	pad_handling_data *pads_hd = PAD_HANDLING_DATA_8_PTR_0x200004FA;
+	filtered_analog_inputs *filtered_analog_inputs = FILTERED_ANALOG_INPUTS_PTR_0x2000059A;
 	filtered_adc_val_t *pad_analog_vals = &filtered_analog_inputs->pads;
 
 	uint8_t status_msbyte = 0;
@@ -1321,10 +1906,10 @@ void eval_pads(void)
 	uint8_t data2_press = 0;
 	uint8_t data2_release = 0;
 
-	if (*ready != READY)
+	if (*pad_analog_rdy != READY)
 		return;
 
-	*ready = NOT_READY;
+	*pad_analog_rdy = NOT_READY;
 
 	// Treat invalid MIDI channels as channel 0 (aka. 1)
 	uint8_t midi_ch = sel_prog_settings->midi_ch;
@@ -1332,8 +1917,7 @@ void eval_pads(void)
 		midi_ch = 0;
 
 	// msg = in_r3; TODO Inspect
-	for (uint8_t i = 0; i < N_PADS; i++)
-	{
+	for (uint8_t i = 0; i < N_PADS; i++) {
 
 		pad_handling_data *pad_hd = &pads_hd[i];
 		filtered_adc_val_t pad_analog_val = pad_analog_vals[i];
@@ -1342,28 +1926,21 @@ void eval_pads(void)
 		pending_midi *on_release_midi = &pads_on_release_midi[i];
 
 		pad_confirmed_t changed = UNCHANGED;
-		switch (pad_hd->last_confirmed_state)
-		{
+		switch (pad_hd->last_confirmed_state) {
 		case CONFIRMED_PRESSED:
 
-			if (pad_analog_val <= PAD_analog_CONSIDERED_RELEASED)
-			{
+			if (pad_analog_val <= PAD_analog_CONSIDERED_RELEASED) {
 
-				if (pad_hd->rel_decr == 0)
-				{
+				if (pad_hd->rel_decr == 0) {
 					pad_hd->last_confirmed_state = CONFIRMED_RELEASED;
 					changed = CONFIRMED_RELEASED;
-				}
-				else
-				{
+				} else {
 					pad_hd->rel_decr--;
 				}
 
 				pad_hd->adc_eval = 0;
 				pad_hd->press_incr = 0;
-			}
-			else
-			{
+			} else {
 				pad_hd->rel_decr = PAD_RELEASE_DECR_START;
 			}
 			break;
@@ -1374,17 +1951,13 @@ void eval_pads(void)
 				break;
 
 			if (pad_hd->press_incr == 0 ||
-			    pad_hd->adc_eval < pad_analog_val)
-			{
+			    pad_hd->adc_eval < pad_analog_val) {
 				pad_hd->adc_eval = pad_analog_val;
 			}
 
-			if (pad_hd->press_incr < PAD_PRESS_INCR_COMPLETE)
-			{
+			if (pad_hd->press_incr < PAD_PRESS_INCR_COMPLETE) {
 				pad_hd->press_incr++;
-			}
-			else
-			{
+			} else {
 				pad_hd->last_confirmed_state = CONFIRMED_PRESSED;
 				changed = CONFIRMED_PRESSED;
 
@@ -1426,12 +1999,10 @@ void eval_pads(void)
 			pad_hd->rel_decr = PAD_RELEASE_DECR_START;
 		}
 
-		switch (changed)
-		{
+		switch (changed) {
 		case CONFIRMED_RELEASED:
 
-			if (sel_mode == MODE_PROG_CHNG)
-			{
+			if (sel_mode == MODE_PROG_CHNG) {
 				states->pad_toggled = TOGGLED_OFF;
 				break;
 			}
@@ -1456,12 +2027,10 @@ void eval_pads(void)
 			 * including PROG_CHNG.
 			 */
 
-			if (is_momentary || is_prog)
-			{
+			if (is_momentary || is_prog) {
 				on_release_midi->pending = NOT_PENDING;
 
-				if (on_release_midi->data1 <= MIDI_MAX_DATA_VAL)
-				{
+				if (on_release_midi->data1 <= MIDI_MAX_DATA_VAL) {
 					states->prog_chng = PAD_STATE_RELEASED;
 
 					if (sel_mode == MODE_PAD)
@@ -1498,8 +2067,7 @@ void eval_pads(void)
 
 			// Prepare MIDI message
 
-			switch (sel_mode)
-			{
+			switch (sel_mode) {
 			case MODE_PAD:
 				status_msbyte = MIDI_CMD_NOTE_ON_MSB;
 				data1 = settings->note;
@@ -1520,49 +2088,42 @@ void eval_pads(void)
 			}
 
 			uint8_t msg[4] = {status_msbyte,
-					  (status_msbyte << 4) | midi_ch,
-					  data1,
-					  data2_press};
+			                  (status_msbyte << 4) | midi_ch,
+			                  data1,
+			                  data2_press
+			                 };
 
 			states->prog_chng = PAD_STATE_PRESSED;
 
 			pad_toggled_t toggled;
-			if (sel_mode == MODE_PAD)
-			{
+			if (sel_mode == MODE_PAD) {
 				states->pad = PAD_STATE_PRESSED;
 
-				if (settings->type == TOGGLE)
-				{
+				if (settings->type == TOGGLE) {
 					states->pad_toggled = !states->pad_toggled;
 					toggled = states->pad_toggled;
 
-					if (toggled == TOGGLED_OFF)
-					{
+					if (toggled == TOGGLED_OFF) {
 						msg[0] = MIDI_CMD_NOTE_OFF_MSB;
 						msg[1] = (MIDI_CMD_NOTE_OFF_MSB << 4) | midi_ch;
 						msg[2] = data1;
 						msg[3] = data2_release;
 					}
 				}
-			}
-			else if (sel_mode == MODE_CC)
-			{
+			} else if (sel_mode == MODE_CC) {
 				states->cc = PAD_STATE_PRESSED;
 
-				if (settings->type == TOGGLE)
-				{
+				if (settings->type == TOGGLE) {
 					states->cc_toggled = !states->cc_toggled;
 					toggled = states->cc_toggled;
 
-					if (toggled == TOGGLED_OFF)
-					{
+					if (toggled == TOGGLED_OFF) {
 						msg[3] = CC_MODE_RELEASE_DATA2;
 					}
 				}
 			}
 
-			if (toggled == TOGGLED_OFF)
-			{
+			if (toggled == TOGGLED_OFF) {
 				states->prog_chng = PAD_STATE_RELEASED;
 
 				if (sel_mode == MODE_PAD)
@@ -1571,13 +2132,10 @@ void eval_pads(void)
 					states->cc = PAD_STATE_RELEASED;
 			}
 
-			if (status_msbyte == MIDI_CMD_NOTE_ON_MSB)
-			{
+			if (status_msbyte == MIDI_CMD_NOTE_ON_MSB) {
 				on_release_midi->cmd_msb = MIDI_CMD_NOTE_OFF_MSB;
 				on_release_midi->cmd = midi_ch | (MIDI_CMD_NOTE_OFF_MSB << 4);
-			}
-			else
-			{
+			} else {
 				on_release_midi->cmd_msb = status_msbyte;
 				on_release_midi->cmd = msg[1];
 			}
@@ -1604,10 +2162,10 @@ void eval_pads(void)
  */
 void read_mode_pbs(void)
 {
-	uint8_t *systick_decr = UINT8_SYSTICK_DECREMENTER_1_0x2000003c;
-	uint8_t *debounce = UINT8_DEBOUNCE_COUNTER_0x2000003e;
-	uint16_t *prev_mode_pbs = UINT16_PREV_MODE_PB_IDR_BITS_0x20000044;
-	uint16_t *mode_pbs = UINT16_MODE_PB_IDR_BITS_CPY_0x20000048;
+	uint8_t *systick_decr = UINT8_PTR_SYSTICK_DECREMENTER_1_0x2000003c;
+	uint8_t *debounce = UINT8_PTR_DEBOUNCE_COUNTER_0x2000003e;
+	uint16_t *prev_mode_pbs = UINT16_PTR_PREV_MODE_PB_IDR_BITS_0x20000044;
+	uint16_t *mode_pbs = UINT16_PTR_MODE_PB_IDR_BITS_CPY_0x20000048;
 
 	// Mode Push buttons are read every 4 SysTick intervals.
 	if (*systick_decr != 0)
@@ -1617,8 +2175,7 @@ void read_mode_pbs(void)
 
 	// Read mode push buttons. Negation due to PU's.
 	const uint32_t _mode_pbs = ~(PB_GPIO_PORT->IDR) & PB_IDR_MSK;
-	if (*prev_mode_pbs != _mode_pbs)
-	{
+	if (*prev_mode_pbs != _mode_pbs) {
 		*debounce = 0;
 		*prev_mode_pbs = _mode_pbs;
 		return;
@@ -1638,8 +2195,7 @@ void read_mode_pbs(void)
 	 * Perhaps this is some compiler bogus related to the data type of the
 	 * debounce counter? Not sure...
 	 */
-	if (*debounce < 240)
-	{
+	if (*debounce < 240) {
 		if (++(*debounce) == MODE_PB_DEBOUNCE_THRESHOLD)
 			*mode_pbs = _mode_pbs;
 	}
@@ -1652,27 +2208,26 @@ void read_mode_pbs(void)
  */
 void eval_mode_pbs(void)
 {
-	const uint16_t mode_pbs = *(uint16_t *)UINT16_MODE_PB_IDR_BITS_CPY_0x20000048;
-	const uint8_t unknown_flag = *(uint8_t *)UINT8_UNKNOWN_FLAG_0x20000011;
+	const uint16_t mode_pbs = *(uint16_t *)UINT16_PTR_MODE_PB_IDR_BITS_CPY_0x20000048;
+	const uint8_t unknown_flag = *(uint8_t *)UINT8_PTR_UNKNOWN_FLAG_0x20000011;
 
-	unknown *prev_mode_pbs = UINT16_PREV_MODE_PB_IDR_BITS_0x20000046;
-	mode_t *selected_mode = UINT8_SELECTED_MODE_0x2000003f;
+	unknown *prev_mode_pbs = UINT16_PTR_PREV_MODE_PB_IDR_BITS_0x20000046;
+	mode_t *selected_mode = UINT8_PTR_SELECTED_MODE_0x2000003f;
 
-	if (*prev_mode_pbs != mode_pbs)
-	{
+	if (*prev_mode_pbs != mode_pbs) {
 
 		*prev_mode_pbs = mode_pbs;
 
 		// Suspecting this is some sort of debug flag...
-		if (unknown_flag != 0)
-		{
+		if (unknown_flag != 0) {
 
 			// Shift bits to start at bit 0. PROG is first GPIO.
 			uint8_t shifted2lsbits = (mode_pbs >> PB_PROG_GPIO);
 
 			// Terminates some sort of SysEx message that conveys mode pb gpio info??!
 			uint8_t data[12] = {0x04, 0x47, 0x00, 0x75, 0x04, 0x6b, 0x00, 0x02,
-					    0x07, 0x5a, shifted2lsbits, 0xf7};
+			                    0x07, 0x5a, shifted2lsbits, 0xf7
+			                   };
 
 			return;
 		}
@@ -1697,13 +2252,11 @@ void eval_mode_pbs(void)
  */
 void rst_pads(void)
 {
-	pending_midi *pads_on_release_midi = PENDING_MIDI_8_RELEASE_MIDI_0x2000052a; // -> pending_midi[N_PADS]
-	pad_states *pads_states = PAD_STATES_8_0x20000552;			     // -> pad_states[N_PADS]
+	pending_midi *pads_on_release_midi = PENDING_MIDI_8_PTR_RELEASE_MIDI_0x2000052a; // -> pending_midi[N_PADS]
+	pad_states *pads_states = PAD_STATES_8_PTR_0x20000552;			     // -> pad_states[N_PADS]
 
-	for (uint8_t i = 0; i < N_PADS; i++)
-	{
-		if (pads_on_release_midi[i].pending == PENDING)
-		{
+	for (uint8_t i = 0; i < N_PADS; i++) {
+		if (pads_on_release_midi[i].pending == PENDING) {
 			pads_on_release_midi[i].pending = NOT_PENDING;
 			pads_states[i].pad_toggled = false;
 			pads_states[i].cc_toggled = false;
@@ -1712,8 +2265,7 @@ void rst_pads(void)
 			pads_states[i].cc = PAD_STATE_RELEASED;
 
 			if (pads_on_release_midi[i].cmd >> 4 == MIDI_CMD_NOTE_OFF_MSB &&
-			    pads_on_release_midi[i].data1 <= MIDI_MAX_DATA_VAL)
-			{
+			    pads_on_release_midi[i].data1 <= MIDI_MAX_DATA_VAL) {
 				// Write NOTE OFF for pad to midi buffer
 				write_midi_buffer(&(pads_on_release_midi[i].cmd_msb), 4);
 			}
@@ -1733,19 +2285,17 @@ void rst_pads(void)
  */
 void update_pad_leds()
 {
-	const mode_t selected_mode = *(uint8_t *)UINT8_SELECTED_MODE_0x2000003f; // uint8_t
+	const mode_t selected_mode = *(uint8_t *)UINT8_PTR_SELECTED_MODE_0x2000003f; // uint8_t
 
-	mode_t *prev_mode = UINT8_PREV_MODE_0x20000031;			   // uint8_t
-	pad_state_t *prev_pads_state = UINT8_8_PREV_PADS_STATE_0x20000033; // -> pad_state_t[N_PADS]
-	pad_states *pads_states = PAD_STATES_8_0x20000552;		   // -> pad_states[N_PADS]
+	mode_t *prev_mode = UINT8_PTR_PREV_MODE_0x20000031;			   // uint8_t
+	pad_state_t *prev_pads_state = UINT8_8_PTR_PREV_PADS_STATE_0x20000033; // -> pad_state_t[N_PADS]
+	pad_states *pads_states = PAD_STATES_8_PTR_0x20000552;		   // -> pad_states[N_PADS]
 
 	// For every Pad
-	for (uint8_t i = 0; i < N_PADS; i++)
-	{
+	for (uint8_t i = 0; i < N_PADS; i++) {
 		pad_state_t pad_state;
 
-		switch (selected_mode)
-		{
+		switch (selected_mode) {
 		case MODE_PAD:
 			pad_state = pads_states[i].pad;
 			break;
@@ -1756,8 +2306,7 @@ void update_pad_leds()
 			pad_state = pads_states[i].prog_chng;
 			break;
 		default:
-			for (uint8_t j = 0; j < N_PADS; j++)
-			{
+			for (uint8_t j = 0; j < N_PADS; j++) {
 				prev_pads_state[j] = PAD_STATE_UNSET;
 			}
 
@@ -1765,15 +2314,12 @@ void update_pad_leds()
 		}
 
 		// Only update pad LED if pad_state has changed or mode has changed
-		if (prev_pads_state[i] != pad_state && *prev_mode != selected_mode)
-		{
+		if (prev_pads_state[i] != pad_state && *prev_mode != selected_mode) {
 			prev_pads_state[i] = pad_state;
 			*prev_mode = selected_mode;
 
-			if (pad_state == PAD_STATE_PRESSED)
-			{
-				switch (i)
-				{
+			if (pad_state == PAD_STATE_PRESSED) {
+				switch (i) {
 				case 0:
 					LED_GPIO_PORT->ODR |= (1 << LED_PAD_1_GPIO);
 					break;
@@ -1801,11 +2347,8 @@ void update_pad_leds()
 				default:
 					break;
 				}
-			}
-			else
-			{
-				switch (i)
-				{
+			} else {
+				switch (i) {
 				case 0:
 					LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_1_GPIO);
 					break;
@@ -1855,22 +2398,20 @@ void update_pad_leds()
  */
 void update_leds(void)
 {
-	const uint8_t unknown_flag = *(uint8_t *)UINT8_UNKNOWN_FLAG_0x20000011; // uint8_t
-	const mode_t selected_mode = *(mode_t *)UINT8_SELECTED_MODE_0x2000003f; // uint8_t
-	const int unknown_enum = *(int *)UNKNOWN_ENUM_0x20000012;		// unknown
+	const uint8_t unknown_flag = *(uint8_t *)UINT8_PTR_UNKNOWN_FLAG_0x20000011; // uint8_t
+	const mode_t selected_mode = *(mode_t *)UINT8_PTR_SELECTED_MODE_0x2000003f; // uint8_t
+	const int unknown_enum = *(int *)UNKNOWN_ENUM_PTR_0x20000012;		// unknown
 
-	mode_t *prev_mode = UINT8_PREV_MODE_0x20000043;				     // -> uint8_t
-	uint8_t *selected_prog = UINT8_SELECTED_PROG_0x20000042;		     // -> uint8_t
-	uint8_t *prev_selected_prog = UINT8_PREV_SELECTED_PROG_0x20000032;	     // -> uint8_t
-	pending_midi *pads_on_release_midi = PENDING_MIDI_8_RELEASE_MIDI_0x2000052a; // -> pending_midi[N_PADS]
-	pad_states *pads_states = PAD_STATES_8_0x20000552;			     // -> pad_states[N_PADS]
+	mode_t *prev_mode = UINT8_PTR_PREV_MODE_0x20000043;				     // -> uint8_t
+	uint8_t *selected_prog = UINT8_PTR_SELECTED_PROG_0x20000042;		     // -> uint8_t
+	uint8_t *prev_selected_prog = UINT8_PTR_PREV_SELECTED_PROG_0x20000032;	     // -> uint8_t
+	pending_midi *pads_on_release_midi = PENDING_MIDI_8_PTR_RELEASE_MIDI_0x2000052a; // -> pending_midi[N_PADS]
+	pad_states *pads_states = PAD_STATES_8_PTR_0x20000552;			     // -> pad_states[N_PADS]
 
 	// I have yet to find out what sets this flag != 0
-	if (unknown_flag == 0)
-	{
+	if (unknown_flag == 0) {
 		/* Check if mode has been switched */
-		if (*prev_mode != selected_mode)
-		{
+		if (*prev_mode != selected_mode) {
 			// Clear PB Pad LEDs
 			LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PAD_GPIO);
 			LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
@@ -1897,16 +2438,14 @@ void update_leds(void)
 			 * 	or
 			 * 	2. Change the MIDI logic to behave like the LED logic
 			 */
-			for (uint8_t i = 0; i < N_PADS; i++)
-			{
+			for (uint8_t i = 0; i < N_PADS; i++) {
 				pads_states[i].prog_chng = 0;
 			}
 			*prev_mode = selected_mode;
 		}
 
 		// Set LEDs according to selected mode
-		switch (selected_mode)
-		{
+		switch (selected_mode) {
 		case MODE_PAD:
 			LED_GPIO_PORT->ODR |= (1 << LED_PB_PAD_GPIO);
 			break;
@@ -1936,12 +2475,10 @@ void update_leds(void)
 			else if ((uint8_t *)PROG_4_SELECT_FLAG == 1)
 				*selected_prog = 4;
 
-			if (*prev_selected_prog != *selected_prog)
-			{
+			if (*prev_selected_prog != *selected_prog) {
 				rst_pads();
 
-				for (uint8_t i = 0; i < N_PADS; i++)
-				{
+				for (uint8_t i = 0; i < N_PADS; i++) {
 					pads_on_release_midi[i].pending = NOT_PENDING;
 					pads_states[i].pad_toggled = false;
 					pads_states[i].cc_toggled = false;
@@ -1951,8 +2488,7 @@ void update_leds(void)
 				}
 			}
 
-			switch (*selected_prog)
-			{
+			switch (*selected_prog) {
 			case 1:
 				LED_GPIO_PORT->ODR |= (1 << LED_PAD_1_GPIO);
 				break;
@@ -1974,9 +2510,7 @@ void update_leds(void)
 		}
 
 		update_pad_leds();
-	}
-	else
-	{
+	} else {
 		/* Clear all LEDs */
 		LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PAD_GPIO);
 		LED_GPIO_PORT->ODR &= ~(1 << LED_PB_PROG_CHNG_GPIO);
@@ -1990,8 +2524,7 @@ void update_leds(void)
 		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_7_GPIO);
 		LED_GPIO_PORT->ODR &= ~(1 << LED_PAD_8_GPIO);
 
-		switch (unknown_enum)
-		{
+		switch (unknown_enum) {
 		case 1:
 			LED_GPIO_PORT->ODR |= (1 << LED_PB_PAD_GPIO);
 			break;
@@ -2047,7 +2580,7 @@ void reload_IWDG(void)
  */
 void deinit_midi_buffer(void)
 {
-	uint8_t *midi_buf_rem_space = UINT8_MIDI_BUFFER_REMAINING_SPACE_0x20000004;
+	uint8_t *midi_buf_rem_space = UINT8_PTR_MIDI_BUFFER_REMAINING_SPACE_0x20000004;
 	uint8_t **midi_buf_tail = UINT8_PTR_PTR_MIDI_BUFFER_TAIL_0x2000000c;
 	uint8_t **midi_buf_head = UINT8_PTR_PTR_MIDI_BUFFER_HEAD_0x20000008;
 
@@ -2057,24 +2590,42 @@ void deinit_midi_buffer(void)
 }
 
 /**
+ * @ 0x08004ef0
+ * Progress: INCOMPLETE
+ * TODO: FUN_0800468e
+ */
+void init(void)
+{
+	uint8_t *unknown_flag_0 = UINT8_PTR_UNKNOWN_FLAG_0x20000000;
+
+	FUN_0800468e();
+	nvic_init_firmware_VTOR();
+	init_GPIOs();
+	init_SYSTICK();
+	init_analog();
+	init_usb();
+	init_midi_buffer();
+	init_IWDG();
+
+	*unknown_flag_0 = 0;
+}
+
+/**
  * @ 0x08005550
  * Progress: INCOMPLETE
  */
 void main_loop()
 {
-	uint8_t *unknown_flag_0 = UINT8_UNKNOWN_FLAG_0x20000000;
-	uint8_t *unknown_flag_1 = UINT8_UNKNOWN_FLAG_0x20000098;
-	mode_t *prev_mode = UINT8_PREV_MODE_0x20000043;
+	uint8_t *unknown_flag_0 = UINT8_PTR_UNKNOWN_FLAG_0x20000000;
+	uint32_t *unknown_1 = UINT32_PTR_PTR_UNKNOWN_0x20000098;
+	mode_t *prev_mode = UINT8_PTR_PREV_MODE_0x20000043;
 
 	FUN_08004ef0();
 	FUN_08005318();
 
-	while (true)
-	{
-		while (true)
-		{
-			while (true)
-			{
+	while (true) {
+		while (true) {
+			while (true) {
 				reload_IWDG();
 
 				if (*unknown_flag_0 == 0)
@@ -2102,7 +2653,7 @@ void main_loop()
 			eval_mode_pbs();
 			update_leds();
 
-			if (*unknown_flag_1 == 0)
+			if (*unknown_1 == 0)
 				break;
 
 			FUN_08002790();
@@ -2112,3 +2663,87 @@ void main_loop()
 		deinit_midi_buffer();
 	}
 }
+
+/**
+ * @ 0x080049b8
+ * Progress: INCOMPLETE
+*/
+void FUN_080049b8(uint32_t param_1)
+{
+	// uint uVar1;
+	// byte *prog_settings;
+
+	// if (param_1 < 5) {
+	// 	prog_settings = (byte *)(param_1 * 0x39 + PROGRAM_SETTINGS_5_PTR_0x200003CC);
+	// 	if (0xf < *prog_settings) {
+	// 		*prog_settings = 0xf;
+	// 	}
+	// 	i = 0;
+	// 	do {
+	// 		if (0x7f < prog_settings[1 + i * 4]) {
+	// 			prog_settings[1 + i * 4] = 0x7f;
+	// 		}
+	// 		if (0x7f < prog_settings[2 + i * 4]) {
+	// 			prog_settings[2 + i * 4] = 0x7f;
+	// 		}
+	// 		if (0x7f < prog_settings[3 + i * 4]) {
+	// 			prog_settings[3 + i * 4] = 0x7f;
+	// 		}
+	// 		if (1 < prog_settings[4 + i * 4]) {
+	// 			prog_settings[4 + i * 4] = 1;
+	// 		}
+	// 		i = i + 1 & 0xff;
+	// 	} while (i < 8);
+	// 	i = 0;
+	// 	do {
+	// 		if (0x7f < prog_settings[i * 3 + 0x21]) {
+	// 			prog_settings[i * 3 + 0x21] = 0x7f;
+	// 		}
+	// 		if (0x7f < prog_settings[i * 3 + 0x22]) {
+	// 			prog_settings[i * 3 + 0x22] = 0;
+	// 		}
+	// 		if (0x7f < prog_settings[i * 3 + 0x23]) {
+	// 			prog_settings[i * 3 + 0x23] = 0x7f;
+	// 		}
+	// 		i = i + 1 & 0xff;
+	// 	} while (i < 8);
+	// }
+	// return;
+
+	if (param_1 >= 5)
+		return;
+
+	program_settings *all_prog_settings = PROGRAM_SETTINGS_5_PTR_0x200003CC;
+	program_settings *sel_prog_settings = &all_prog_settings[param_1];
+
+	if (sel_prog_settings->midi_ch > MIDI_MAX_CHANNEL)
+		sel_prog_settings->midi_ch = MIDI_MAX_CHANNEL;
+
+	for (uint8_t i = 0; i < N_PADS; i++) {
+		pad_settings *psettings = &sel_prog_settings->pads[i];
+
+		if (psettings->note > MIDI_MAX_DATA_VAL)
+			psettings->note = MIDI_MAX_DATA_VAL;
+
+		if (psettings->cc > MIDI_MAX_DATA_VAL)
+			psettings->cc = MIDI_MAX_DATA_VAL;
+
+		if (psettings->pc > MIDI_MAX_DATA_VAL)
+			psettings->pc = MIDI_MAX_DATA_VAL;
+
+		if (psettings->type > TOGGLE)
+			psettings->type = TOGGLE;
+	}
+
+	for (uint8_t i = 0; i < N_PADS; i++) {
+		knob_settings *ksettings = &sel_prog_settings->knobs[i];
+
+		if (ksettings->cc > MIDI_MAX_DATA_VAL)
+			ksettings->cc = MIDI_MAX_DATA_VAL;
+
+		if (ksettings->leftmost > MIDI_MAX_DATA_VAL)
+			ksettings->leftmost = MIDI_MAX_DATA_VAL;
+
+		if (ksettings->rightmost > MIDI_MAX_DATA_VAL)
+			ksettings->rightmost = MIDI_MAX_DATA_VAL;
+	}
